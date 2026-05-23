@@ -8,8 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "History Timelines",
-        short_name: "Timelines",
+        name: "Ever-When",
+        short_name: "Ever-When",
         description: "Explore historical timelines side by side.",
         theme_color: "#0f172a",
         background_color: "#0f172a",
