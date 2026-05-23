@@ -22,3 +22,18 @@ supabase/.temp/
 
 # Claude Code per-user settings
 .claude/settings.local.json
+
+# Bubblewrap / Android — keep config, never commit binaries or signing key
+android/android.keystore
+android/*.keystore
+android/*.jks
+android/*.keystore.bak
+android/*.apk
+android/*.aab
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/keystore.json
