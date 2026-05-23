@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.local
+*.local
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# python (importer)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# Claude Code per-user settings
+.claude/settings.local.json
