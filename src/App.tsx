@@ -49,38 +49,52 @@ const DEFAULT_PIXELS_PER_YEAR = 4;
 // for billion-year datasets.
 const LINEAR_RANGE_YEARS = 500;
 
-const COLUMN_MIN_WIDTH_PX = 140;      // floor so phone columns stay readable
+const COLUMN_MIN_WIDTH_PX = 100;      // floor for very narrow phones
 const AXIS_WIDTH_PX = 72;
 const HEADER_HEIGHT_PX = 37;
-// Below this viewport width we render 2 timeline columns instead of 3, and the
-// header collapses (Phase 2). Matches Tailwind's `md` breakpoint.
+// Below this *measured-container* width we render 2 timeline columns instead
+// of 3, and the header collapses (Phase 2). Matches Tailwind's `md` breakpoint.
 const MOBILE_BREAKPOINT_PX = 768;
 
-// Hook: tracks viewport width and derives how many timeline columns to show
-// + how wide each column should be. The third (or third + fourth) timeline
-// still exists in state on mobile — it's just clipped from render until the
-// viewport widens again (e.g. rotate to landscape).
-function useResponsiveLayout(desktopColumns: number) {
-  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+// Hook: observes the actual width of the scroll-container element (not
+// window.innerWidth — that can over-report on Android TWAs with system
+// insets and lead to columns overflowing off-screen) and derives how many
+// timeline columns to show + how wide each column should be. The clipped
+// timelines stay in state and reappear at >= MOBILE_BREAKPOINT_PX.
+function useResponsiveLayout(
+  containerRef: React.RefObject<HTMLElement>,
+  desktopColumns: number,
+) {
+  const [containerWidth, setContainerWidth] = useState<number>(() =>
     typeof window === "undefined" ? 1280 : window.innerWidth,
   );
-  useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Seed from the actual element width on mount; subsequent updates come
+    // from the ResizeObserver. This catches the case where the initial render
+    // used window.innerWidth but the element is slightly narrower.
+    setContainerWidth(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") {
+      const onResize = () => setContainerWidth(el.clientWidth);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === "number" && w > 0) setContainerWidth(Math.floor(w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [containerRef]);
 
-  const isMobile = viewportWidth < MOBILE_BREAKPOINT_PX;
+  const isMobile = containerWidth < MOBILE_BREAKPOINT_PX;
   const visibleColumnCount = isMobile ? 2 : desktopColumns;
-  // Subtract the year axis, then split the remainder evenly. The Math.max
-  // guard keeps columns from going below COLUMN_MIN_WIDTH_PX on very narrow
-  // phones — they'll overflow horizontally instead, which is preferable to
-  // unreadable widths.
   const columnWidth = Math.max(
     COLUMN_MIN_WIDTH_PX,
-    Math.floor((viewportWidth - AXIS_WIDTH_PX) / visibleColumnCount),
+    Math.floor((containerWidth - AXIS_WIDTH_PX) / visibleColumnCount),
   );
-  return { isMobile, visibleColumnCount, columnWidth };
+  return { isMobile, containerWidth, visibleColumnCount, columnWidth };
 }
 
 // EVENT_BOX_HEIGHT_PX is now dynamic — see `boxHeight` derived from
@@ -173,10 +187,16 @@ export default function App() {
   const [timelineNames, setTimelineNames] = useState<string[]>(
     () => DEFAULT_TIMELINE_NAMES,
   );
+  // Forward-declared so useResponsiveLayout can observe its width. The actual
+  // ref attachment happens on <main> further down. Refs are stable across
+  // renders, so we can pass it into a hook before the element exists; the
+  // hook tolerates ref.current being null on the first render.
+  const mainRef = useRef<HTMLElement>(null);
   // Responsive layout: on phones we render fewer columns (2 vs 3) and resize
   // each to fit. The clipped timelines stay in state — rotating to landscape
   // brings them back.
   const { visibleColumnCount, columnWidth } = useResponsiveLayout(
+    mainRef,
     DEFAULT_TIMELINE_NAMES.length,
   );
   const [pixelsPerYear, setPixelsPerYear] = useState(DEFAULT_PIXELS_PER_YEAR);
@@ -258,7 +278,7 @@ export default function App() {
     { columnIndex: number; stamp: number } | null
   >(null);
 
-  const mainRef = useRef<HTMLElement>(null);
+  // mainRef declared at top of component (so useResponsiveLayout can observe it).
   // After a zoom change, restore scroll so that `year` lines up with
   // `anchorPxFromTop` pixels below the viewport top. Centre-anchored zoom uses
   // anchorPxFromTop = clientHeight/2; cursor-anchored zoom (wheel/pinch) uses
