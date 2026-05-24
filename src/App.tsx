@@ -49,18 +49,25 @@ const DEFAULT_PIXELS_PER_YEAR = 4;
 // for billion-year datasets.
 const LINEAR_RANGE_YEARS = 500;
 
-const COLUMN_MIN_WIDTH_PX = 100;      // floor for very narrow phones
+const COLUMN_MIN_WIDTH_PX = 140;      // narrowest width that still feels readable
 const AXIS_WIDTH_PX = 72;
 const HEADER_HEIGHT_PX = 37;
-// Below this *measured-container* width we render 2 timeline columns instead
-// of 3, and the header collapses (Phase 2). Matches Tailwind's `md` breakpoint.
+// Used by the header to decide when to collapse settings into the hamburger
+// menu. Independent of the column-count math below — that's now purely a
+// function of how many columns fit at MIN width.
 const MOBILE_BREAKPOINT_PX = 768;
 
 // Hook: observes the actual width of the scroll-container element (not
 // window.innerWidth — that can over-report on Android TWAs with system
-// insets and lead to columns overflowing off-screen) and derives how many
-// timeline columns to show + how wide each column should be. The clipped
-// timelines stay in state and reappear at >= MOBILE_BREAKPOINT_PX.
+// insets and lead to columns overflowing off-screen) and derives:
+//   - visibleColumnCount: how many timeline columns to render right now,
+//     so they always fit within the container at >= MIN width
+//   - columnWidth: exact px width per column, so cols + axis == container
+//   - isMobile: viewport hint for non-layout UI decisions (menu, popup)
+//
+// Phone portrait (~360px): 2 cols at 144px each
+// Phone landscape (~800px): 3 cols at 243px each (capped at desktopColumns)
+// Desktop (>= 1024px): 3 cols at ~317px+ each (capped at desktopColumns)
 function useResponsiveLayout(
   containerRef: React.RefObject<HTMLElement>,
   desktopColumns: number,
@@ -72,7 +79,7 @@ function useResponsiveLayout(
     const el = containerRef.current;
     if (!el) return;
     // Seed from the actual element width on mount; subsequent updates come
-    // from the ResizeObserver. This catches the case where the initial render
+    // from the ResizeObserver. Catches the case where the initial render
     // used window.innerWidth but the element is slightly narrower.
     setContainerWidth(el.clientWidth);
     if (typeof ResizeObserver === "undefined") {
@@ -88,12 +95,17 @@ function useResponsiveLayout(
     return () => ro.disconnect();
   }, [containerRef]);
 
-  const isMobile = containerWidth < MOBILE_BREAKPOINT_PX;
-  const visibleColumnCount = isMobile ? 2 : desktopColumns;
-  const columnWidth = Math.max(
-    COLUMN_MIN_WIDTH_PX,
-    Math.floor((containerWidth - AXIS_WIDTH_PX) / visibleColumnCount),
+  const available = Math.max(0, containerWidth - AXIS_WIDTH_PX);
+  // How many cols of MIN width fit? Cap at desktopColumns (user's choice);
+  // floor at 1 (always render at least one column even on hilariously narrow
+  // viewports — better than blanking the timeline entirely).
+  const visibleColumnCount = Math.max(
+    1,
+    Math.min(desktopColumns, Math.floor(available / COLUMN_MIN_WIDTH_PX)),
   );
+  // Divide remaining width evenly so no horizontal overflow is ever possible.
+  const columnWidth = Math.floor(available / visibleColumnCount);
+  const isMobile = containerWidth < MOBILE_BREAKPOINT_PX;
   return { isMobile, containerWidth, visibleColumnCount, columnWidth };
 }
 
@@ -166,20 +178,6 @@ function compactYearLabel(y: number): string {
   return String(y);
 }
 
-// Header chip + preset-button year label. Handles BCE and
-// large geological numbers (kya / mya / bya) so labels stay short.
-function formatYear(y: number): string {
-  if (!Number.isFinite(y)) return String(y);
-  if (y === 0) return "0";
-  const abs = Math.abs(y);
-  let label: string;
-  if (abs >= 1_000_000_000) label = `${(abs / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "")} bya`;
-  else if (abs >= 1_000_000)  label = `${(abs / 1_000_000).toFixed(2).replace(/\.?0+$/, "")} mya`;
-  else if (abs >= 10_000)     label = `${(abs / 1_000).toFixed(1).replace(/\.?0+$/, "")} kya`;
-  else                        label = abs.toLocaleString();
-  return y < 0 ? (abs >= 10_000 ? label : `${label} BCE`) : `${label} CE`;
-}
-
 export default function App() {
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   // Names of the columns to render, in display order. Search may replace the
@@ -195,6 +193,8 @@ export default function App() {
   // Responsive layout: on phones we render fewer columns (2 vs 3) and resize
   // each to fit. The clipped timelines stay in state — rotating to landscape
   // brings them back.
+  // (isMobile from useResponsiveLayout will be used in Phase 2 to switch the
+  //  header into a hamburger-menu drawer; not needed for the column math yet.)
   const { visibleColumnCount, columnWidth } = useResponsiveLayout(
     mainRef,
     DEFAULT_TIMELINE_NAMES.length,
@@ -826,14 +826,8 @@ export default function App() {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
+      <header className="sticky top-0 z-40 flex-shrink-0 px-4 py-3 border-b border-slate-700 bg-slate-900 flex items-center gap-3">
         <h1 className="text-lg font-semibold">Ever-When</h1>
-        <span
-          className="text-xs text-slate-400 tabular-nums"
-          title="Auto-fitted to the full extent of the data"
-        >
-          {formatYear(yearMin)} – {formatYear(yearMax)}
-        </span>
 
         <div className="ml-4">
           <SearchBar
@@ -969,10 +963,12 @@ export default function App() {
 
       <main
         ref={mainRef}
-        className="flex-1 overflow-auto"
-        // touch-action: none prevents the browser's native pinch-zoom from
-        // ever firing on this element, so on touch devices our gesture
-        // handlers get the events instead of the page being magnified.
+        className="flex-1 overflow-y-auto overflow-x-hidden"
+        // touch-action: pan-y allows finger drag to scroll vertically through
+        // years; the gesture handlers below intercept 2-finger touches for
+        // pinch zoom. overflow-x-hidden enforces the "single page view, no
+        // horizontal scroll" mobile constraint — the column-count formula
+        // already guarantees no overflow, this just defends against bugs.
         style={{ touchAction: "pan-y" }}
       >
         <div className="flex items-start">
@@ -1017,6 +1013,7 @@ export default function App() {
           anchorRect={hovered.rect}
           onMouseEnter={handlePopupEnter}
           onMouseLeave={handlePopupLeave}
+          onClose={() => { clearTimers(); setHovered(null); }}
         />
       )}
 

@@ -9,17 +9,25 @@ import {
 const POPUP_WIDTH = 360;
 const POPUP_MAX_HEIGHT = 420;
 const MARGIN = 8;
+// Below this viewport width we drop the desktop "anchored to the event"
+// behaviour and pin the popup to the bottom of the screen across full width.
+// Matches the column-count breakpoint in App.tsx.
+const POPUP_MOBILE_BREAKPOINT_PX = 768;
 
 export function EventPopup({
   event,
   anchorRect,
   onMouseEnter,
   onMouseLeave,
+  onClose,
 }: {
   event: EventWithPriority;
   anchorRect: DOMRect;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  /** Tap close (×) and tap-outside dismiss. Required for touch devices where
+   *  mouseleave never fires. */
+  onClose: () => void;
 }) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,16 +51,36 @@ export function EventPopup({
     };
   }, [event.id, event.wikipedia_link]);
 
-  const pos = computePosition(anchorRect);
+  // On mobile, render as a bottom sheet spanning the full width (so it covers
+  // both visible timeline columns). On desktop, position next to the event.
+  const isMobile =
+    typeof window !== "undefined" &&
+    window.innerWidth < POPUP_MOBILE_BREAKPOINT_PX;
+
+  const containerStyle: React.CSSProperties = isMobile
+    ? {
+        left: 0,
+        right: 0,
+        bottom: 0,
+        maxHeight: "50vh",
+        borderRadius: "12px 12px 0 0",
+      }
+    : (() => {
+        const pos = computePosition(anchorRect);
+        return {
+          left: pos.left,
+          top: pos.top,
+          width: POPUP_WIDTH,
+          maxHeight: POPUP_MAX_HEIGHT,
+        };
+      })();
 
   return (
     <div
-      className="fixed z-50 rounded-lg border border-slate-600 bg-slate-800 text-slate-100 shadow-xl overflow-hidden"
+      className="fixed z-50 border border-slate-600 bg-slate-800 text-slate-100 shadow-xl overflow-hidden"
       style={{
-        left: pos.left,
-        top: pos.top,
-        width: POPUP_WIDTH,
-        maxHeight: POPUP_MAX_HEIGHT,
+        ...containerStyle,
+        ...(isMobile ? {} : { borderRadius: 8 }),
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -67,7 +95,7 @@ export function EventPopup({
       )}
       <div className="p-3 space-y-2">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold leading-tight">
+          <h3 className="text-sm font-semibold leading-tight flex-1">
             {event.title}
           </h3>
           <span
@@ -77,6 +105,14 @@ export function EventPopup({
             {(event.display_date ?? event.start_year ?? "") +
               (event.date_uncertain && !String(event.display_date ?? "").endsWith("*") ? "*" : "")}
           </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 -mt-1 -mr-1 w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
+          >
+            <span aria-hidden className="text-base leading-none">×</span>
+          </button>
         </div>
 
         {summary?.description && (
