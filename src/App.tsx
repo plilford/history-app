@@ -50,7 +50,8 @@ const DEFAULT_PIXELS_PER_YEAR = 4;
 const LINEAR_RANGE_YEARS = 500;
 
 const COLUMN_MIN_WIDTH_PX = 140;      // narrowest width that still feels readable
-const AXIS_WIDTH_PX = 72;
+const AXIS_WIDTH_DESKTOP_PX = 72;
+const AXIS_WIDTH_MOBILE_PX = 48;      // tighter on phones to give columns more room
 const HEADER_HEIGHT_PX = 37;
 // Used by the header to decide when to collapse settings into the hamburger
 // menu. Independent of the column-count math below — that's now purely a
@@ -95,7 +96,11 @@ function useResponsiveLayout(
     return () => ro.disconnect();
   }, [containerRef]);
 
-  const available = Math.max(0, containerWidth - AXIS_WIDTH_PX);
+  const isMobile = containerWidth < MOBILE_BREAKPOINT_PX;
+  // Narrower year-axis gutter on phones to give the timeline columns more
+  // pixels. Year labels stay readable down to ~48px.
+  const axisWidth = isMobile ? AXIS_WIDTH_MOBILE_PX : AXIS_WIDTH_DESKTOP_PX;
+  const available = Math.max(0, containerWidth - axisWidth);
   // How many cols of MIN width fit? Cap at desktopColumns (user's choice);
   // floor at 1 (always render at least one column even on hilariously narrow
   // viewports — better than blanking the timeline entirely).
@@ -105,8 +110,7 @@ function useResponsiveLayout(
   );
   // Divide remaining width evenly so no horizontal overflow is ever possible.
   const columnWidth = Math.floor(available / visibleColumnCount);
-  const isMobile = containerWidth < MOBILE_BREAKPOINT_PX;
-  return { isMobile, containerWidth, visibleColumnCount, columnWidth };
+  return { isMobile, containerWidth, axisWidth, visibleColumnCount, columnWidth };
 }
 
 // EVENT_BOX_HEIGHT_PX is now dynamic — see `boxHeight` derived from
@@ -193,12 +197,38 @@ export default function App() {
   // Responsive layout: on phones we render fewer columns (2 vs 3) and resize
   // each to fit. The clipped timelines stay in state — rotating to landscape
   // brings them back.
-  // (isMobile from useResponsiveLayout will be used in Phase 2 to switch the
-  //  header into a hamburger-menu drawer; not needed for the column math yet.)
-  const { visibleColumnCount, columnWidth } = useResponsiveLayout(
-    mainRef,
-    DEFAULT_TIMELINE_NAMES.length,
-  );
+  const { isMobile, visibleColumnCount, columnWidth, axisWidth } =
+    useResponsiveLayout(mainRef, DEFAULT_TIMELINE_NAMES.length);
+
+  // Mobile-only: hamburger menu is open. On desktop, settings sit inline in
+  // the header so this is always false there.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Close the menu on outside tap / Escape.
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onDocClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    // pointerdown beats click — closes before the underlying tap fires.
+    document.addEventListener("pointerdown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [mobileMenuOpen]);
+  // Auto-close the menu if the viewport grows back to desktop width.
+  useEffect(() => {
+    if (!isMobile && mobileMenuOpen) setMobileMenuOpen(false);
+  }, [isMobile, mobileMenuOpen]);
   const [pixelsPerYear, setPixelsPerYear] = useState(DEFAULT_PIXELS_PER_YEAR);
   const [error, setError] = useState<string | null>(null);
 
@@ -824,12 +854,142 @@ export default function App() {
     );
   }
 
+  // ----- pieces shared between the desktop header and the mobile menu -------
+  const densityControl = (
+    <label
+      className="flex items-center gap-1 text-slate-400"
+      title="Occurrences shown per timeline (smaller = more fit)"
+    >
+      <span>Density</span>
+      <input
+        type="range"
+        min={MIN_DENSITY}
+        max={MAX_DENSITY}
+        step={1}
+        value={occurrenceDensity}
+        onChange={(e) => setOccurrenceDensity(Number(e.target.value))}
+        className="w-24"
+      />
+      <span className="tabular-nums w-6 text-slate-200">{occurrenceDensity}</span>
+    </label>
+  );
+
+  const dateModeControl = (
+    <label
+      className="flex items-center gap-1 text-slate-400"
+      title="Show day & month inside occurrence boxes"
+    >
+      <span>Dates</span>
+      <select
+        value={dateDisplayMode}
+        onChange={(e) => setDateDisplayMode(e.target.value as DateDisplayMode)}
+        className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-200"
+      >
+        <option value="auto">Auto</option>
+        <option value="always">Always</option>
+        <option value="never">Never</option>
+      </select>
+    </label>
+  );
+
+  const lifespansToggle = (
+    <button
+      onClick={() => setShowLifespans((v) => !v)}
+      title="Show or hide person full-lifespan bars (birth → death)"
+      className={`px-2 py-1 rounded border border-slate-700 ${
+        showLifespans ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
+      }`}
+    >
+      Lifespans
+    </button>
+  );
+
+  const regionsToggle = (
+    <button
+      onClick={() => setShowRegionPanel((v) => !v)}
+      title="Adjust regional emphasis for Worldwide & Arts/Thoughts timelines"
+      className={`px-2 py-1 rounded border border-slate-700 ${
+        showRegionPanel ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
+      }`}
+    >
+      Regions
+    </button>
+  );
+
+  const regionPanel = (
+    <div className="flex flex-wrap items-center gap-3 text-xs">
+      <span className="text-slate-400 w-full md:w-auto">
+        Regional emphasis (Worldwide &amp; Arts/Thoughts only):
+      </span>
+      {REGIONS.map((r) => (
+        <label key={r.key} className="flex items-center gap-1 text-slate-300">
+          <span className="w-20">{r.label}</span>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={1}
+            value={regionFilter[r.key]}
+            onChange={(e) =>
+              setRegionFilter((prev) => ({
+                ...prev,
+                [r.key]: Number(e.target.value),
+              }))
+            }
+            className="w-24"
+          />
+          <span className="tabular-nums w-5 text-slate-200">
+            {regionFilter[r.key]}
+          </span>
+        </label>
+      ))}
+      <button
+        onClick={() => setRegionFilter(DEFAULT_REGION_FILTER)}
+        className="px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800 text-slate-400"
+      >
+        Reset
+      </button>
+    </div>
+  );
+
+  const zoomButtons = (
+    <div className="flex items-center gap-1 text-xs">
+      <button
+        onClick={zoomOut}
+        title="Zoom out"
+        className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+      >
+        −
+      </button>
+      {/* Reset/label only fits on desktop — moves into the mobile menu. */}
+      <button
+        onClick={zoomReset}
+        title="Reset zoom"
+        className="hidden md:inline-block px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 min-w-[90px]"
+      >
+        {zoomLabel(pixelsPerYear)}
+      </button>
+      <button
+        onClick={zoomIn}
+        title="Zoom in"
+        className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+      >
+        +
+      </button>
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col">
-      <header className="sticky top-0 z-40 flex-shrink-0 px-4 py-3 border-b border-slate-700 bg-slate-900 flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Ever-When</h1>
+      <header className="sticky top-0 z-40 flex-shrink-0 px-3 md:px-4 py-3 border-b border-slate-700 bg-slate-900 flex items-center gap-2 md:gap-3">
+        {/* Title is presentational only; hidden on mobile to free horizontal
+            space. The launcher icon and PWA name already identify the app. */}
+        <h1 className="hidden md:block text-lg font-semibold flex-shrink-0">
+          Ever-When
+        </h1>
 
-        <div className="ml-4">
+        {/* Search bar takes whatever room is left. */}
+        <div className="flex-1 min-w-0">
           <SearchBar
             showLifespans={showLifespans}
             onPickYear={handlePickYear}
@@ -837,127 +997,66 @@ export default function App() {
           />
         </div>
 
-        <div className="ml-auto flex items-center gap-3 text-xs">
-          {/* Occurrence density slider */}
-          <label
-            className="flex items-center gap-1 text-slate-400"
-            title="Occurrences shown per timeline (smaller = more fit)"
-          >
-            <span>Density</span>
-            <input
-              type="range"
-              min={MIN_DENSITY}
-              max={MAX_DENSITY}
-              step={1}
-              value={occurrenceDensity}
-              onChange={(e) => setOccurrenceDensity(Number(e.target.value))}
-              className="w-24"
-            />
-            <span className="tabular-nums w-6 text-slate-200">
-              {occurrenceDensity}
-            </span>
-          </label>
-
-          {/* Date display mode toggle */}
-          <label
-            className="flex items-center gap-1 text-slate-400"
-            title="Show day & month inside occurrence boxes"
-          >
-            <span>Dates</span>
-            <select
-              value={dateDisplayMode}
-              onChange={(e) =>
-                setDateDisplayMode(e.target.value as DateDisplayMode)
-              }
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-200"
-            >
-              <option value="auto">Auto</option>
-              <option value="always">Always</option>
-              <option value="never">Never</option>
-            </select>
-          </label>
-
-          {/* Lifespans toggle */}
-          <button
-            onClick={() => setShowLifespans((v) => !v)}
-            title="Show or hide person full-lifespan bars (birth → death)"
-            className={`px-2 py-1 rounded border border-slate-700 ${
-              showLifespans ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
-            }`}
-          >
-            Lifespans
-          </button>
-
-          {/* Region-weight panel toggle */}
-          <button
-            onClick={() => setShowRegionPanel((v) => !v)}
-            title="Adjust regional emphasis for Worldwide & Arts/Thoughts timelines"
-            className={`px-2 py-1 rounded border border-slate-700 ${
-              showRegionPanel ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
-            }`}
-          >
-            Regions
-          </button>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={zoomOut}
-              title="Zoom out"
-              className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
-            >
-              −
-            </button>
-            <button
-              onClick={zoomReset}
-              title="Reset zoom"
-              className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 min-w-[90px]"
-            >
-              {zoomLabel(pixelsPerYear)}
-            </button>
-            <button
-              onClick={zoomIn}
-              title="Zoom in"
-              className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
-            >
-              +
-            </button>
-          </div>
+        {/* Desktop-only inline settings. Hidden via md:flex on phones. */}
+        <div className="hidden md:flex items-center gap-3 text-xs">
+          {densityControl}
+          {dateModeControl}
+          {lifespansToggle}
+          {regionsToggle}
         </div>
+
+        {zoomButtons}
+
+        {/* Hamburger menu — phone only. */}
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((v) => !v)}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
+          className={`md:hidden flex items-center justify-center w-9 h-9 rounded border border-slate-700 ${
+            mobileMenuOpen ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800 text-slate-300"
+          }`}
+        >
+          <span aria-hidden className="text-lg leading-none">
+            {mobileMenuOpen ? "×" : "≡"}
+          </span>
+        </button>
       </header>
 
-      {showRegionPanel && (
-        <div className="px-4 py-2 border-b border-slate-700 bg-slate-900 flex flex-wrap items-center gap-4 text-xs">
-          <span className="text-slate-400">
-            Regional emphasis (Worldwide &amp; Arts/Thoughts only):
-          </span>
-          {REGIONS.map((r) => (
-            <label key={r.key} className="flex items-center gap-1 text-slate-300">
-              <span className="w-20">{r.label}</span>
-              <input
-                type="range"
-                min={0}
-                max={10}
-                step={1}
-                value={regionFilter[r.key]}
-                onChange={(e) =>
-                  setRegionFilter((prev) => ({
-                    ...prev,
-                    [r.key]: Number(e.target.value),
-                  }))
-                }
-                className="w-24"
-              />
-              <span className="tabular-nums w-5 text-slate-200">
-                {regionFilter[r.key]}
-              </span>
-            </label>
-          ))}
-          <button
-            onClick={() => setRegionFilter(DEFAULT_REGION_FILTER)}
-            className="ml-auto px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800 text-slate-400"
-          >
-            Reset
-          </button>
+      {/* Mobile menu panel — drops below the header when ≡ is tapped. The
+          ref + useEffect above close it on outside tap / Escape. */}
+      {mobileMenuOpen && (
+        <div
+          ref={menuRef}
+          className="md:hidden sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-700 bg-slate-900 shadow-lg"
+        >
+          <div className="flex flex-col gap-3 text-xs">
+            {densityControl}
+            {dateModeControl}
+            <div className="flex items-center gap-2">
+              {lifespansToggle}
+              {regionsToggle}
+              <button
+                onClick={zoomReset}
+                title="Reset zoom"
+                className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 ml-auto"
+              >
+                Reset {zoomLabel(pixelsPerYear)}
+              </button>
+            </div>
+            {showRegionPanel && (
+              <div className="pt-2 border-t border-slate-800">{regionPanel}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop: when Regions toggled on, slide out the panel inline below
+          the header (the original behaviour). Phones see this inside the
+          mobile menu panel instead, so don't double-render here. */}
+      {showRegionPanel && !isMobile && (
+        <div className="px-4 py-2 border-b border-slate-700 bg-slate-900">
+          {regionPanel}
         </div>
       )}
 
@@ -976,6 +1075,7 @@ export default function App() {
             scale={scale}
             viewportScrollTop={viewport.scrollTop}
             viewportClientHeight={viewport.clientHeight}
+            width={axisWidth}
           />
           {orderedTimelines.map((t, idx) => (
             <TimelineColumn
@@ -1042,10 +1142,13 @@ function YearAxis({
   scale,
   viewportScrollTop,
   viewportClientHeight,
+  width,
 }: {
   scale: YearScale;
   viewportScrollTop: number;
   viewportClientHeight: number;
+  /** Responsive: 72px on desktop, 48px on phones. */
+  width: number;
 }) {
   // Year-mode ticks across the whole timeline (cheap to recompute, scale-keyed).
   const yearTicks = useMemo(() => generateLogTicks(scale, 80, 500), [scale]);
@@ -1073,7 +1176,7 @@ function YearAxis({
   return (
     <div
       className="flex-shrink-0 bg-slate-900 border-r border-slate-700"
-      style={{ width: AXIS_WIDTH_PX }}
+      style={{ width }}
     >
       <div
         className="sticky top-0 z-30 bg-slate-900 border-b border-slate-700 flex items-center px-2"

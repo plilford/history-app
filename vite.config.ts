@@ -7,6 +7,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // Make updates take effect on the very next reload rather than
+      // requiring all open tabs/instances to close first. Important for
+      // the TWA case where the app may stay alive in background indefinitely.
+      workbox: { clientsClaim: true, skipWaiting: true },
       manifest: {
         name: "Ever-When",
         short_name: "Ever-When",
