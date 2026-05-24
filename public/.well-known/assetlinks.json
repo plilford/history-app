@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.everwhen.app",
+      "sha256_cert_fingerprints": [
+        "12:D8:FE:1A:96:E2:41:6C:6A:78:35:7F:1F:2B:2E:86:B9:E2:74:BA:E6:91:E6:69:EC:24:F2:D8:2C:AA:3E:6A"
+      ]
+    }
+  }
+]
