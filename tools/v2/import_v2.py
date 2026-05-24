@@ -59,6 +59,9 @@ TIMELINES = [
     {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False},
     {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False},
     {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False},
+    {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False},
+    {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False},
+    {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False},
 ]
 
 

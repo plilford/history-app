@@ -60,16 +60,19 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   // Americas
   usa: "americas",
   "us-presidents": "americas",
+  "pre-columbian-americas": "americas",
 
   // Asia
   china: "asia",
   india: "asia",
+  japan: "asia",
 
   // Conflicts — wars and inter-state confrontations
   ww1: "conflicts",
   ww2: "conflicts",
   "cold-war": "conflicts",
   napoleonic: "conflicts",
+  crusades: "conflicts",
 
   // Major periods — eras, movements
   renaissance: "major-periods",
