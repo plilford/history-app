@@ -2046,19 +2046,23 @@ function TimelineColumn({
 // ----- Event box ------------------------------------------------------------
 // Binding pattern:
 //   - Mouse (desktop): pointerenter / pointerleave drive the popup, matching
-//     the original hover model.
-//   - Touch / pen (mobile): pointerdown opens; the popup stays open until the
-//     × button or an outside tap dismisses it (no pointerleave equivalent on
-//     touch — releasing the finger doesn't mean "stop showing").
-// This unifies the prior onMouseEnter / onMouseLeave which on Android's
-// synthesized mouse events raced with the open-delay timer in handleBoxEnter
-// and silently lost the popup on quick taps.
+//     the original hover model. Opens instantly.
+//   - Touch / pen (mobile): pointerdown starts a TAP_DELAY_MS timer. If the
+//     finger moves more than TAP_MOVE_THRESHOLD_PX (= scroll started), or the
+//     touch is cancelled, the timer is killed and the popup never opens.
+//     Otherwise the popup opens when the timer fires, and stays open until
+//     the × button or an outside tap dismisses it. The delay-then-cancel
+//     pattern stops the popup from flashing in during 1-finger scrolls and
+//     during pinch zooms.
+const TAP_DELAY_MS = 180;
+const TAP_MOVE_THRESHOLD_PX = 8;
 function useHoverBinding(
   event: EventWithPriority,
   onEnter: HoverHandler,
   onLeave: () => void,
 ) {
   const ref = useRef<HTMLDivElement>(null);
+  const tapTimerRef = useRef<number | null>(null);
   return {
     ref,
     onPointerEnter: (e: React.PointerEvent) => {
@@ -2071,7 +2075,36 @@ function useHoverBinding(
     },
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === "mouse") return;
-      if (ref.current) onEnter(event, ref.current.getBoundingClientRect());
+      // Reset any pending tap from a previous (cancelled) interaction.
+      if (tapTimerRef.current != null) {
+        window.clearTimeout(tapTimerRef.current);
+        tapTimerRef.current = null;
+      }
+      const startX = e.clientX;
+      const startY = e.clientY;
+      // Document-level listeners so we still catch movement after the finger
+      // slides off the box (which is what happens during a scroll).
+      const onMove = (me: PointerEvent) => {
+        const dx = me.clientX - startX;
+        const dy = me.clientY - startY;
+        if (Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD_PX) cancel();
+      };
+      const cancel = () => {
+        if (tapTimerRef.current != null) {
+          window.clearTimeout(tapTimerRef.current);
+          tapTimerRef.current = null;
+        }
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointercancel", cancel);
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointercancel", cancel);
+      tapTimerRef.current = window.setTimeout(() => {
+        tapTimerRef.current = null;
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointercancel", cancel);
+        if (ref.current) onEnter(event, ref.current.getBoundingClientRect());
+      }, TAP_DELAY_MS);
     },
   };
 }

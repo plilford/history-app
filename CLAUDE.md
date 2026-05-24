@@ -53,7 +53,7 @@ RLS:
 
 ## Authoring new occurrences
 
-The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **3,489 entries**, max ID **1_005_559**. New IDs should start at `1_005_560` and be contiguous within a batch.
+The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **3,488 entries**, max ID **1_005_560** (the "Napoleonic Wars" umbrella row). New IDs should start at `1_005_561` and be contiguous within a batch.
 
 ### Entry shape
 
