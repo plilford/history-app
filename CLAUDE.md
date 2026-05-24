@@ -156,6 +156,74 @@ python -m v2.import_v2    # idempotent; safe to re-run
 
 `main_category` and `main_priority` are recomputed by trigger after each priority change, so don't touch those columns directly.
 
+## Authoring checklist (run through this for every batch)
+
+Before considering a batch "done", verify every new entry has:
+
+**Required fields**
+- [ ] `id` — unique, ≥ 1_000_000, contiguous within the batch
+- [ ] `title` — globally unique (case-insensitive after trim); `validate.py` flags collisions
+- [ ] `type` — `"event"` | `"person"` | `"art"`
+- [ ] `start_year` (integer; negative for BCE)
+- [ ] `description` — concise, matches existing prose style
+- [ ] `wikipedia` — real URL, ideally matching the entry exactly
+
+**Date precision**
+- [ ] Post-1500 events: `start_month`/`start_day` whenever reliably known
+- [ ] Periods: `end_year` (and `end_month`/`end_day` if known); the importer auto-derives `is_period` from `end_year != start_year`, so you don't need to set the flag manually
+- [ ] Pre-1500 vague dates: `date_uncertain: True`
+- [ ] Currently-running things (reigns, ongoing wars, presidencies): `is_ongoing: True` and omit `end_year`
+- [ ] BCE / deep-time / "circa" cases where the auto-label is misleading: set `display_date`
+
+**Type-specific**
+- [ ] `type: "person"` with `is_full_life: True` for biographical lifespan entries
+- [ ] `type: "art"` for paintings, films, novels, symphonies — set year of completion/publication
+- [ ] `type: "event"` for everything else, including person-events ("Newton publishes Principia" is event, not person)
+- [ ] Bands/ensembles: `type: "person"` WITHOUT `is_full_life=True` (so they keep rendering when Lifespans toggle is off)
+- [ ] Every `is_full_life=True` person needs at least one `type: "event"` or `type: "art"` entry inside their lifespan name-matching them (search-bar's lifespan fallback relies on this)
+
+**Slug tagging — ALWAYS check every applicable category**
+- [ ] `master` (always present)
+- [ ] **Country / regional**: `england`, `france`, `germany`, `china`, `japan`, `india`, `usa`, `ottoman`, `pre-columbian-americas`, `ancient-greece`, `roman-history`
+- [ ] **Sub-country topics**: `england-monarchs` (English monarchs), `us-presidents` (US presidents)
+- [ ] **Conflicts**: `ww1`, `ww2`, `cold-war`, `napoleonic`, `crusades` (anything that's a child or active battle of these wars)
+- [ ] **Religions**: `christianity`, `islam`, `judaism` for clearly religious entries. **Anything tagged on christianity/islam/judaism MUST also be on `major-religions`.** Buddhist/Hindu/Sikh/Confucian/Taoist/Shinto entries go ONLY on `major-religions` (not on the three Abrahamic slugs).
+- [ ] **Periods**: `renaissance`, `industrial` for clear era-anchored entries
+- [ ] **Cross-cutting**: `arts-and-thoughts` for ALL `type: "art"` entries plus philosophy, scientific publications, paradigm-shifting ideas; `people` for ALL `type: "person"` + `is_full_life: True` entries
+
+**Priority values** (full 0–1M range — no floor)
+- [ ] Master priority calibrated to the existing dataset (typical buckets: 990k+ civilizational hinges, 950k major events, 900k turning points, 850k important-but-specific, 750k notable, 600–749k regional/niche)
+- [ ] Per-slug priority = `master + 30k` if title is strongly anchored to the slug; `master − 90k` if the entry is multi-regional (shared with another country/lens)
+
+**Region weights** (1–10, default 5 each, only used on `master` + `arts-and-thoughts`)
+- [ ] Truly global: omit `region_weights` (defaults to 5 everywhere)
+- [ ] Region-anchored: bias the relevant regions; treat as "how much would someone there care about this"
+
+**Umbrella references** (rollup zoom)
+- [ ] If entry belongs to a broader umbrella period that exists as its own row, set `first_zoom_out` (and optionally `second_zoom_out`) to the umbrella's exact title
+- [ ] `validate.py` flags dangling refs; importer's `rebuild_zoom_out_ids()` populates FK columns
+
+**Before importing**
+- [ ] `cd tools && python -m v2.validate` — must exit 0
+- [ ] If validate reports duplicate titles: use `python -m v2.curation.purge_c6_dupes` to auto-generate purge tuples for `purge_duplicates.py`, then apply
+- [ ] `python -m v2.curation.audit_and_fix_slugs --apply` — auto-tags missed major-religions / people / arts-and-thoughts / WW slugs; safe to run after any batch
+- [ ] `python -m v2.import_v2` — idempotent
+
+## Audit tooling
+
+`tools/v2/curation/audit_and_fix_slugs.py` is the source of truth for "did this batch tag everything correctly". Run after every authoring batch — it surfaces:
+
+- **Mechanical fixes** (auto-applied with `--apply`):
+  - Entries on christianity/islam/judaism missing major-religions
+  - `type=person` + `is_full_life=True` missing the `people` slug
+  - `type=art` missing the `arts-and-thoughts` slug
+  - Clear WW1/WW2/Cold-War title-keyword matches missing the slug
+- **Soft audit** (review-only — too high false-positive risk to auto-apply):
+  - Likely Christian content (mentions church/monastery/saint/etc.) missing the `christianity` slug — ~135 candidates as of late session I; check year and context before tagging
+  - Likely Islamic content missing the `islam` slug — ~40 candidates
+
+If you want broader audits (country slugs, conflict slugs beyond the WW ones, etc.), extend the same script.
+
 ## Production setup
 
 What's actually wired up:
