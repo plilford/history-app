@@ -1,6 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Timeline } from "../types/database";
+import {
+  TIMELINE_GROUP_LABELS,
+  TIMELINE_GROUP_ORDER,
+  groupForSlug,
+  type TimelineGroup,
+} from "../lib/timelineGroups";
 
 /**
  * Popover used to swap the timeline shown in a column. Mounted as a child of
@@ -104,12 +110,34 @@ export function TimelinePicker({
   }, []);
 
   // ----- Filtering + autofill --------------------------------------------
-  // `match` is the first timeline name that *starts with* the query — used as
-  // the autofill suggestion shown in grey behind the input.
-  const filtered = useMemo(() => {
+  // `filtered` is sorted into our display groups (Worldwide, Europe, Americas,
+  // Asia, Conflicts, Major periods, …). The flat `filtered` array preserves
+  // the rendering order; `groupBoundaries` records where group headers should
+  // be inserted by the render code. Keyboard navigation still walks the flat
+  // array — headers are visual-only.
+  const { filtered, groupBoundaries } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return allTimelines;
-    return allTimelines.filter((t) => t.name.toLowerCase().includes(q));
+    const matches = q
+      ? allTimelines.filter((t) => t.name.toLowerCase().includes(q))
+      : allTimelines;
+    // Bucket by group, preserving each group's existing display_order.
+    const buckets = new Map<TimelineGroup, Timeline[]>();
+    for (const t of matches) {
+      const g = groupForSlug(t.slug);
+      let arr = buckets.get(g);
+      if (!arr) { arr = []; buckets.set(g, arr); }
+      arr.push(t);
+    }
+    // Concat in canonical group order. Empty groups skipped.
+    const flat: Timeline[] = [];
+    const boundaries: { index: number; group: TimelineGroup }[] = [];
+    for (const g of TIMELINE_GROUP_ORDER) {
+      const arr = buckets.get(g);
+      if (!arr || arr.length === 0) continue;
+      boundaries.push({ index: flat.length, group: g });
+      flat.push(...arr);
+    }
+    return { filtered: flat, groupBoundaries: boundaries };
   }, [allTimelines, query]);
 
   const autofillSuggestion = useMemo(() => {
@@ -143,7 +171,9 @@ export function TimelinePicker({
     if (!list) return;
     const idx = filtered.findIndex((t) => t.name === currentName);
     if (idx < 0) return;
-    const child = list.children[idx] as HTMLElement | undefined;
+    // Use data-item-idx to look up the right <li> — headers are interleaved
+    // as <li role="presentation"> elements so children[idx] doesn't line up.
+    const child = list.querySelector<HTMLElement>(`[data-item-idx="${idx}"]`);
     child?.scrollIntoView({ block: "nearest" });
     setHi(idx);
     // Run only once after the initial load.
@@ -171,7 +201,7 @@ export function TimelinePicker({
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const child = list.children[hi] as HTMLElement | undefined;
+    const child = list.querySelector<HTMLElement>(`[data-item-idx="${hi}"]`);
     child?.scrollIntoView({ block: "nearest" });
   }, [hi]);
 
@@ -269,11 +299,28 @@ export function TimelinePicker({
         )}
         {!loading &&
           filtered.map((t, i) => {
+            // If this item starts a new group, emit a non-selectable header
+            // row first. Headers use role="presentation" so screen readers
+            // skip them; keyboard navigation also skips them because hi
+            // walks the flat `filtered` array, which doesn't include headers.
+            const boundary = groupBoundaries.find((b) => b.index === i);
+            const header = boundary ? (
+              <li
+                key={`hdr-${boundary.group}`}
+                role="presentation"
+                className="px-2 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-500 select-none"
+              >
+                {TIMELINE_GROUP_LABELS[boundary.group]}
+              </li>
+            ) : null;
+
             const active = i === hi;
             const isCurrent = t.name === currentName;
-            return (
+            return [
+              header,
               <li
                 key={t.id}
+                data-item-idx={i}
                 role="option"
                 aria-selected={active}
                 onMouseEnter={() => setHi(i)}
@@ -294,8 +341,8 @@ export function TimelinePicker({
                     current
                   </span>
                 )}
-              </li>
-            );
+              </li>,
+            ];
           })}
         {!loading && filtered.length === 0 && (
           <li className="px-2 py-2 text-slate-500 italic">No matches</li>

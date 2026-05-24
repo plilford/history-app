@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import type { HistoryEvent } from "../types/database";
+import type { HistoryEvent, Timeline } from "../types/database";
 import { normalizeOngoing } from "../lib/dateFormat";
 
-// What the dropdown row represents. A "year" row jumps the timeline to a date;
-// an "occurrence" row jumps to an event's key date and (if needed) swaps in the
-// timeline where that event has the highest priority score.
+// What the dropdown row represents.
+//   "year"        — jumps the timeline to a date.
+//   "occurrence"  — jumps to an event's key date and (if needed) swaps in the
+//                   timeline where that event has the highest priority score.
+//   "timeline"    — swaps the rightmost visible column to this timeline.
 type ResultRow =
   | { kind: "year"; year: number; label: string }
-  | { kind: "occurrence"; event: HistoryEvent };
+  | { kind: "occurrence"; event: HistoryEvent }
+  | { kind: "timeline"; timeline: Timeline };
 
 const SEARCH_DEBOUNCE_MS = 180;
 const MAX_RESULTS = 10;
@@ -96,6 +99,7 @@ export function SearchBar({
   showLifespans,
   onPickYear,
   onPickOccurrence,
+  onPickTimeline,
 }: {
   /** Mirrors the header toggle. When false, full-life person results are
    *  substituted at fetch time with the highest-priority event mentioning
@@ -104,16 +108,46 @@ export function SearchBar({
   showLifespans: boolean;
   onPickYear: (year: number) => void;
   onPickOccurrence: (event: HistoryEvent) => void;
+  /** Called when a user picks a timeline-row from the search dropdown. The
+   *  parent decides which column to swap (typically the rightmost visible
+   *  one — see App.tsx::handlePickTimelineFromSearch). */
+  onPickTimeline: (timeline: Timeline) => void;
 }) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [occurrences, setOccurrences] = useState<HistoryEvent[]>([]);
+  const [allTimelines, setAllTimelines] = useState<Timeline[]>([]);
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ----- Load all timelines once -----------------------------------------
+  // The set is small (~20) and stable enough to fetch eagerly so timeline
+  // matches can be filtered locally without round-tripping the network on
+  // every keystroke.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("timelines")
+        .select("*")
+        .order("display_order", { ascending: true })
+        .order("name", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error("timeline list fetch failed", error);
+        return;
+      }
+      setAllTimelines((data ?? []) as Timeline[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Debounce the input → debounced state used to drive queries.
   useEffect(() => {
@@ -178,18 +212,34 @@ export function SearchBar({
     };
   }, [debounced, showLifespans]);
 
-  // Combine year-row (if any) with occurrence rows.
+  // Filter timelines locally by case-insensitive substring on name. Cheap
+  // enough to recompute on every keystroke given how few timelines there
+  // are (~20).
+  const matchingTimelines = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as Timeline[];
+    return allTimelines
+      .filter((t) => t.name.toLowerCase().includes(q))
+      .slice(0, 6);  // cap so timelines don't crowd out occurrences
+  }, [allTimelines, query]);
+
+  // Combine year-row (if any) + timeline rows + occurrence rows. Timelines
+  // sit above occurrences because they're a navigation jump (cheaper) and
+  // the user typed a name match.
   const rows: ResultRow[] = useMemo(() => {
     const out: ResultRow[] = [];
     const year = parseYearInput(query);
     if (year != null) {
       out.push({ kind: "year", year, label: `Go to ${displayYear(year)}` });
     }
+    for (const t of matchingTimelines) {
+      out.push({ kind: "timeline", timeline: t });
+    }
     for (const e of occurrences) {
       out.push({ kind: "occurrence", event: e });
     }
     return out;
-  }, [query, occurrences]);
+  }, [query, occurrences, matchingTimelines]);
 
   // Keep the highlighted-row index in bounds whenever the result list changes.
   useEffect(() => {
@@ -209,8 +259,10 @@ export function SearchBar({
 
   function pick(row: ResultRow) {
     if (row.kind === "year") onPickYear(row.year);
-    else onPickOccurrence(row.event);
+    else if (row.kind === "occurrence") onPickOccurrence(row.event);
+    else if (row.kind === "timeline") onPickTimeline(row.timeline);
     setOpen(false);
+    setQuery("");
     inputRef.current?.blur();
   }
 
@@ -287,6 +339,30 @@ export function SearchBar({
                   }}
                 >
                   <span className="text-amber-300">⌖</span> {row.label}
+                </li>
+              );
+            }
+            if (row.kind === "timeline") {
+              const t = row.timeline;
+              return (
+                <li
+                  key={`tl-${t.id}`}
+                  className={cls}
+                  role="option"
+                  aria-selected={active}
+                  onMouseEnter={() => setHi(i)}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault();
+                    pick(row);
+                  }}
+                  title={t.slug}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="truncate flex-1">{t.name}</span>
+                    <span className="text-[10px] text-slate-500 shrink-0">
+                      (timeline)
+                    </span>
+                  </div>
                 </li>
               );
             }

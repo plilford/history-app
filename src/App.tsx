@@ -599,6 +599,35 @@ export default function App() {
   }
 
   // ---- Timeline picker handlers ------------------------------------------
+  // Search-bar pick → swap the rightmost VISIBLE column. On desktop and
+  // phone landscape that's column index 2 (3 cols rendered); on phone
+  // portrait it's index 1 (2 cols rendered). Off-screen columns from
+  // timelineNames stay parked in state — when the device rotates back, the
+  // user gets them back rather than losing their setup.
+  function handlePickTimelineFromSearch(timeline: Timeline) {
+    const swapIndex = Math.max(0, visibleColumnCount - 1);
+    setTimelineNames((prev) => {
+      if (prev.length === 0) return [timeline.name];
+      const next = prev.slice();
+      // Ensure the array is long enough to address swapIndex. (Off-screen
+      // slots beyond swapIndex stay where they were — only the visible
+      // rightmost slot changes.)
+      while (next.length <= swapIndex) next.push(next[next.length - 1] ?? "");
+      // If the picked timeline is already in another column, swap them so
+      // the user doesn't end up with duplicate columns.
+      const existingIdx = next.indexOf(timeline.name);
+      if (existingIdx >= 0 && existingIdx !== swapIndex) {
+        next[existingIdx] = next[swapIndex];
+      }
+      next[swapIndex] = timeline.name;
+      return next;
+    });
+    // After the swap, the new column will fetch its own events. Use the
+    // existing swap-target mechanism so it auto-centres if nothing in the
+    // new lens is currently in view.
+    setSwapTarget({ columnIndex: swapIndex, stamp: Date.now() });
+  }
+
   function handleHeaderClick(columnIndex: number, rect: DOMRect) {
     const currentName = timelineNames[columnIndex] ?? "";
     // Toggle off if the user clicks the same column header twice.
@@ -1074,6 +1103,7 @@ export default function App() {
             showLifespans={showLifespans}
             onPickYear={handlePickYear}
             onPickOccurrence={handlePickOccurrence}
+            onPickTimeline={handlePickTimelineFromSearch}
           />
         </div>
 
