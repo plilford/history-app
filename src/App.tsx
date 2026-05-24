@@ -22,7 +22,8 @@ import {
   type YearScale,
 } from "./lib/yearScale";
 
-const HOVER_OPEN_DELAY_MS = 250;
+// HOVER_OPEN_DELAY_MS retired — touch needs immediate open or it races with
+// pointerleave; mouse hover opens instantly too and feels snappier.
 const HOVER_CLOSE_DELAY_MS = 200;
 // (search bar: keeps centre-of-viewport scroll, swaps rightmost timeline column)
 
@@ -407,17 +408,21 @@ export default function App() {
   const [hovered, setHovered] = useState<
     { event: EventWithPriority; rect: DOMRect } | null
   >(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const clearTimers = () => {
     if (openTimerRef.current)  { window.clearTimeout(openTimerRef.current);  openTimerRef.current = null; }
     if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
   };
+  // handleBoxEnter is called for BOTH mouse pointerenter (with delay, so
+  // moving over a stack of boxes doesn't flicker) AND touch pointerdown.
+  // For touch we want immediate open; for mouse the delay is fine. The
+  // useHoverBinding hook routes them through the same callback, so we open
+  // immediately here and let the close-delay handle anti-flicker.
   const handleBoxEnter: HoverHandler = (event, rect) => {
     clearTimers();
-    openTimerRef.current = window.setTimeout(() => {
-      setHovered({ event, rect });
-    }, HOVER_OPEN_DELAY_MS);
+    setHovered({ event, rect });
   };
   const handleBoxLeave = () => {
     if (openTimerRef.current) { window.clearTimeout(openTimerRef.current); openTimerRef.current = null; }
@@ -427,6 +432,27 @@ export default function App() {
   };
   const handlePopupEnter = () => clearTimers();
   const handlePopupLeave = handleBoxLeave;
+  // Outside-tap dismiss for touch users (the × button works too, but tapping
+  // anywhere off the popup feels more natural than hunting for the close
+  // button on a small screen).
+  useEffect(() => {
+    if (!hovered) return;
+    const onDocPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") return;     // desktop uses hover-leave
+      const target = e.target as Node | null;
+      if (!target) return;
+      // Tap inside the popup → keep it open.
+      if (popupRef.current && popupRef.current.contains(target)) return;
+      // Tap on any event box → handleBoxEnter will swap the popup contents;
+      // don't pre-emptively clear here, that would cancel the swap.
+      const onAnotherBox = (target as Element).closest?.("[data-occurrence-box]");
+      if (onAnotherBox) return;
+      clearTimers();
+      setHovered(null);
+    };
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => document.removeEventListener("pointerdown", onDocPointerDown);
+  }, [hovered]);
 
   useEffect(() => {
     setError(null);
@@ -761,9 +787,14 @@ export default function App() {
     const midpointY = (a: Touch, b: Touch) => (a.clientY + b.clientY) / 2;
 
     const onTouchStart = (ev: TouchEvent) => {
-      if (ev.touches.length < 2) return;
+      if (ev.touches.length < 2) return;     // 1-finger: let browser scroll
       const target = ev.target as Node | null;
       if (!target || !main.contains(target)) return;
+      // Claim the gesture immediately. Without this, Android may decide the
+      // 2-finger touch is a y-pan (per touch-action: pan-y) before our
+      // touchmove fires, and never deliver moves to us — which is the
+      // "one-handed pinch sometimes doesn't react" symptom.
+      ev.preventDefault();
       const t1 = ev.touches[0];
       const t2 = ev.touches[1];
       touchInitialDistance = distanceBetween(t1, t2);
@@ -815,7 +846,9 @@ export default function App() {
     main.addEventListener("gesturestart", onGestureStart as EventListener);
     main.addEventListener("gesturechange", onGestureChange as EventListener);
     main.addEventListener("gestureend", onGestureEnd as EventListener);
-    main.addEventListener("touchstart", onTouchStart, { passive: true });
+    // touchstart MUST be non-passive so preventDefault on 2-finger taps
+    // actually works (passive listeners can't cancel events).
+    main.addEventListener("touchstart", onTouchStart, { passive: false });
     main.addEventListener("touchmove",  onTouchMove,  { passive: false });
     main.addEventListener("touchend",   onTouchEnd);
     main.addEventListener("touchcancel", onTouchEnd);
@@ -1109,6 +1142,7 @@ export default function App() {
 
       {hovered && (
         <EventPopup
+          ref={popupRef}
           event={hovered.event}
           anchorRect={hovered.rect}
           onMouseEnter={handlePopupEnter}
@@ -2010,6 +2044,15 @@ function TimelineColumn({
 }
 
 // ----- Event box ------------------------------------------------------------
+// Binding pattern:
+//   - Mouse (desktop): pointerenter / pointerleave drive the popup, matching
+//     the original hover model.
+//   - Touch / pen (mobile): pointerdown opens; the popup stays open until the
+//     × button or an outside tap dismisses it (no pointerleave equivalent on
+//     touch — releasing the finger doesn't mean "stop showing").
+// This unifies the prior onMouseEnter / onMouseLeave which on Android's
+// synthesized mouse events raced with the open-delay timer in handleBoxEnter
+// and silently lost the popup on quick taps.
 function useHoverBinding(
   event: EventWithPriority,
   onEnter: HoverHandler,
@@ -2018,10 +2061,18 @@ function useHoverBinding(
   const ref = useRef<HTMLDivElement>(null);
   return {
     ref,
-    onMouseEnter: () => {
+    onPointerEnter: (e: React.PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
       if (ref.current) onEnter(event, ref.current.getBoundingClientRect());
     },
-    onMouseLeave: onLeave,
+    onPointerLeave: (e: React.PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      onLeave();
+    },
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      if (ref.current) onEnter(event, ref.current.getBoundingClientRect());
+    },
   };
 }
 
@@ -2112,8 +2163,10 @@ function OccurrenceBox({
   return (
     <div
       ref={bind.ref}
-      onMouseEnter={bind.onMouseEnter}
-      onMouseLeave={bind.onMouseLeave}
+      data-occurrence-box
+      onPointerEnter={bind.onPointerEnter}
+      onPointerLeave={bind.onPointerLeave}
+      onPointerDown={bind.onPointerDown}
       className="absolute z-10 hover:z-20 left-1 right-1 rounded border px-2 py-1 overflow-hidden transition-colors"
       style={{
         top,

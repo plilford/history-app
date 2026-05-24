@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import type { EventWithPriority } from "../types/database";
 import {
   fetchWikiSummary,
@@ -14,13 +14,7 @@ const MARGIN = 8;
 // Matches the column-count breakpoint in App.tsx.
 const POPUP_MOBILE_BREAKPOINT_PX = 768;
 
-export function EventPopup({
-  event,
-  anchorRect,
-  onMouseEnter,
-  onMouseLeave,
-  onClose,
-}: {
+export const EventPopup = forwardRef<HTMLDivElement, {
   event: EventWithPriority;
   anchorRect: DOMRect;
   onMouseEnter: () => void;
@@ -28,7 +22,13 @@ export function EventPopup({
   /** Tap close (×) and tap-outside dismiss. Required for touch devices where
    *  mouseleave never fires. */
   onClose: () => void;
-}) {
+}>(function EventPopup({
+  event,
+  anchorRect,
+  onMouseEnter,
+  onMouseLeave,
+  onClose,
+}, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +62,9 @@ export function EventPopup({
         left: 0,
         right: 0,
         bottom: 0,
-        maxHeight: "50vh",
+        // Allow up to 70vh on mobile so longer Wikipedia summaries don't get
+        // cut off above the weblink. The container itself scrolls vertically.
+        maxHeight: "70vh",
         borderRadius: "12px 12px 0 0",
       }
     : (() => {
@@ -77,7 +79,11 @@ export function EventPopup({
 
   return (
     <div
-      className="fixed z-50 border border-slate-600 bg-slate-800 text-slate-100 shadow-xl overflow-hidden"
+      ref={ref}
+      // overflow-y-auto on the outer container lets the user scroll within the
+      // popup to reach the weblink/links at the bottom — the previous
+      // overflow-hidden was clipping content past the maxHeight.
+      className="fixed z-50 border border-slate-600 bg-slate-800 text-slate-100 shadow-xl overflow-y-auto overflow-x-hidden overscroll-contain"
       style={{
         ...containerStyle,
         ...(isMobile ? {} : { borderRadius: 8 }),
@@ -128,13 +134,9 @@ export function EventPopup({
         )}
 
         {summary?.extract ? (
-          <p className="text-xs text-slate-200 leading-snug max-h-44 overflow-y-auto pr-1">
-            {summary.extract}
-          </p>
+          <p className="text-xs text-slate-200 leading-snug">{summary.extract}</p>
         ) : event.description ? (
-          <p className="text-xs text-slate-200 leading-snug max-h-44 overflow-y-auto pr-1">
-            {event.description}
-          </p>
+          <p className="text-xs text-slate-200 leading-snug">{event.description}</p>
         ) : loading ? (
           <p className="text-xs text-slate-500 italic">Loading…</p>
         ) : null}
@@ -163,7 +165,7 @@ export function EventPopup({
       </div>
     </div>
   );
-}
+});
 
 function computePosition(rect: DOMRect): { left: number; top: number } {
   const winW = window.innerWidth;

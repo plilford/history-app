@@ -252,8 +252,11 @@ export function SearchBar({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder="Search event or year…"
-        className="w-72 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-500"
+        placeholder="Search…"
+        // w-full lets the parent (flex-1 min-w-0 wrapper in App.tsx) shrink the
+        // input to fit on phones. On desktop the w-72 override restores the
+        // fixed 288px width the design assumes.
+        className="w-full md:w-72 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-500"
       />
       {showDropdown && (
         <ul
