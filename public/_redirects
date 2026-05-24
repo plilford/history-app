@@ -1,0 +1,9 @@
+# Cloudflare static-asset routing rules.
+# Format: <source path>  <destination path>  <status>
+# Status 200 = rewrite (URL stays the same, different content served).
+# Status 301/302 = visible redirect.
+
+# Android Digital Asset Links must live at /.well-known/assetlinks.json by
+# spec, but Cloudflare Workers Builds excludes dot-prefixed directories from
+# its asset bundle. Rewrite the canonical path to a non-dot file.
+/.well-known/assetlinks.json   /assetlinks.json   200
