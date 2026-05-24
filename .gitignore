@@ -38,3 +38,7 @@ android/local.properties
 android/.idea/
 android/*.iml
 android/keystore.json
+
+# Curation script dry-run artifacts (regenerable)
+tools/v2/curation/proposed_*.json
+tools/v2/curation/c6_purge_tuples.txt

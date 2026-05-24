@@ -5,9 +5,9 @@ He's the sole developer + sole editor.
 
 ## Stack (locked)
 
-- Frontend: React + TypeScript + Vite, packaged as a PWA.
-- Backend: Supabase (Postgres + REST + Auth + Realtime). **Local Supabase via Docker** during development; hosted Supabase is the next step.
-- Android: PWA → Trusted Web Activity (TWA) via Bubblewrap.
+- Frontend: React + TypeScript + Vite, packaged as a PWA. **Deployed at https://ever-when.com via Cloudflare Pages** (auto-deploys from GitHub `main`).
+- Backend: Supabase Postgres + REST + Auth + Realtime. **Production runs on hosted Supabase**; a local Supabase via Docker may still exist as a dev sandbox but the live app and the data importer talk to hosted.
+- Android: PWA → Trusted Web Activity (TWA) via Bubblewrap, packaged as `com.everwhen.app`. Asset-links file is served from the same domain so Android trusts the TWA.
 
 ## Where things are
 
@@ -22,7 +22,7 @@ He's the sole developer + sole editor.
 
 ## Schema as of migration 009 (`009_pre_hosted_cleanup.sql`)
 
-This migration was just written and is the cleanup pass BEFORE moving to hosted. **It has not been applied yet on hosted.** Order matters; the migration runs in a single transaction.
+This is the cleanup pass that landed alongside the move to hosted Supabase. **Applied in production.** Order matters; the migration runs in a single transaction.
 
 Tables:
 
@@ -43,17 +43,17 @@ RLS:
 
 ## Locked conventions
 
-- **Priority scale: 0–1,000,000 integers.** 800k is a soft floor; new entries can break it. Each slug is internally ranked 800k–1M; `master` is the global-notability slug.
+- **Priority scale: 0–1,000,000 integers.** No floor — calibrate new entries against existing entries on the same slug. `master` is the global-notability slug; other slugs are internally ranked by within-slug importance, which is *not* the same as global importance (e.g. Magna Carta is huge on `england` but Hamilton's tariff is high on `usa` despite being globally minor). Re-curation is easy and expected.
 - **Region weights are multipliers, not tie-breakers.** `effective = base * sum(slider*weight)/sum(slider) / 5`. Applied to `master` and `arts-and-thoughts` only.
 - **Default timelines on app load:** Master, Arts and Thoughts, England: Monarchs.
-- **Two-level rollup zoom:** <80yr → leaf events; 80–800yr → collapse to `first_zoom_out`; ≥800yr → collapse to `second_zoom_out` (else first). Umbrellas are first-class rows.
+- **Two-level rollup zoom:** <80yr → leaf events; 80–800yr → collapse to `first_zoom_out`; ≥800yr → collapse to `second_zoom_out` (else first). Umbrellas are first-class rows. Search-pick auto-zooms to the entry's natural rollup level and exempts the flashed entry from substitution/hiding (see `handlePickOccurrence` in App.tsx).
 - **Date precision:** Year-only / month-only / day precision all supported. Renderer flexes box position within the unknown window so year-only entries don't all stack on 1 Jan.
 - **Ongoing periods:** `is_ongoing=true` + null end_year. Frontend's `normalizeOngoing()` substitutes current year at fetch time so placement code can treat them as ordinary periods.
 - **IDs ≥ 1_000_000.** v1 spreadsheet IDs were < 1M; this guard is kept even though v1 is dropped.
 
 ## Authoring new occurrences
 
-The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **3,488 entries**, max ID **1_005_560** (the "Napoleonic Wars" umbrella row). New IDs should start at `1_005_561` and be contiguous within a batch.
+The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **~3,902 entries**, max ID around **1_006_119**. New IDs should continue from there, contiguous within a batch. (Run `python -c "from v2.data.master import OCCURRENCES; print(max(o['id'] for o in OCCURRENCES))"` to get the precise current max.)
 
 ### Entry shape
 
@@ -84,10 +84,18 @@ Keys are double-quoted; values use whatever quoting reads naturally. IDs use und
 
 ### Priority conventions
 
-- **Per-slug priority is internally ranked, not absolute.** Each slug occupies the range 800k–1M; ordering within the slug reflects within-slug importance. `master` is the only slug that reflects global notability.
-- New entries on `master` default to **900_000**. Bump to 920k–965k for things that obviously dominate their era; 970k+ for the truly universal markers (printing press, French Revolution, WW2, moon landing).
-- For other slugs, pick a value that places the entry in roughly the right spot relative to existing entries on that slug. Don't sweat exact rankings — re-curation is easy later.
-- 800k is a soft floor; pushing slightly below is fine for less-prominent inclusions.
+- **Per-slug priority is internally ranked, not absolute.** Use the full 0–1,000,000 range. `master` reflects global notability; other slugs reflect within-slug importance ("how essential is this to telling THIS timeline's story?").
+- **Calibrate against existing entries on the same slug.** Before picking a number, scan a few neighbour entries in master.py (or query Supabase). Match the granularity you see there.
+- Rough master-slug calibration (existing distribution: min ~600k, median ~900k, max 1M):
+  - **990k+**: civilizational hinges (Big Bang, French Revolution, fall of Constantinople, Luther's 95 Theses).
+  - **950–989k**: major events most educated people know (Battle of Hastings, Treaty of Versailles, moon landing).
+  - **900–949k**: significant turning points (Battle of Marathon, dissolution of monasteries, Battle of Sedan).
+  - **800–899k**: important but not universally known (Solon's reforms, Bismarck's social insurance, Peasants' Revolt).
+  - **700–799k**: notable specific events (individual battles, treaties, local reforms).
+  - **600–699k**: regional/niche importance only.
+  - **<600k**: minor curiosities.
+- Per-slug priority is typically `master + 30k` for entries firmly anchored to that slug (`Magna Carta` on `england`, `Hagia Sophia` on `roman-history`) and `master - 90k` when the entry is multi-regional and the slug isn't the primary lens (`D-Day` on `england`, `Hannibal's Hydaspes` on `ancient-greece`). See `tools/v2/curation/recurate_england_roman.py` for the rule applied at scale.
+- Don't sweat exact rankings — re-curation is easy and there are scripts in `tools/v2/curation/` that redistribute priorities automatically.
 
 ### Region weights (1–10, default 5)
 
@@ -134,7 +142,9 @@ Match the umbrella's title exactly (case-insensitive trim). `validate.py` flags 
 
 For 1–30 entries — edit `master.py` directly, append to the end of `OCCURRENCES`. Read the last ~30 entries first to anchor on the recent style and pick the next free ID.
 
-For 50–1000 entries — write a Python script that constructs the dicts (loops, lookup tables, etc.), then either appends to master.py via the existing `serialize(occs)` helper in `outputs/backfill_dates_session1.py`, or prints the dicts to stdout for you to paste in. Doing one big append in a single edit is cleaner than many small ones.
+For 50–1000 entries — write a Python script that constructs the dicts (loops, lookup tables, etc.) and appends to master.py. Use `tools/v2/curation/append_entries.py` — it has a `format_entry()` + `append_entries(entries)` helper that emits the canonical 5-line dict style and appends just before the closing `]` of the OCCURRENCES list. The recent `phase_d_*.py` and `phase_c*.py` scripts in `tools/v2/curation/` are working examples. Doing one big append in a single script run is cleaner than many small ones, and the importer's `on_conflict="id"` makes re-runs safe.
+
+For de-duplication: `validate.py` flags case-insensitive title collisions. When a new batch collides with an existing entry, decide which to keep (mine is usually richer; old is usually the master-priority baseline). `tools/v2/curation/purge_duplicates.py` is the pattern: delete one ID, bump the other's master priority to preserve historical ranking. `tools/v2/curation/purge_c6_dupes.py` auto-generates the (delete_id, keep_id, new_master_pri) tuples from validate's error output, which is far faster than transcribing them by hand.
 
 Either way, before importing:
 
@@ -146,31 +156,34 @@ python -m v2.import_v2    # idempotent; safe to re-run
 
 `main_category` and `main_priority` are recomputed by trigger after each priority change, so don't touch those columns directly.
 
-## Deploy punch list
+## Production setup
 
-In rough order. Everything builds on what comes before:
+What's actually wired up:
 
-1. **Apply migration 009 to hosted Supabase.**
-   - Create the hosted project at supabase.com.
-   - Paste `supabase/migrations/001…009_pre_hosted_cleanup.sql` into the SQL editor in order — 009 is wrapped in `begin/commit` so it's atomic on its own. Earlier migrations should be applied via `supabase db push` if you wire up the CLI, or pasted one-by-one.
-   - Confirm `pg_trgm` extension enabled, RLS policies exist on `occurrences` / `occurrence_timeline_priorities` / `timelines`, and the `rebuild_zoom_out_ids()` function exists.
+- **Hosted Supabase project.** Migrations 001–009 applied. `pg_trgm` extension, RLS policies on `occurrences` / `occurrence_timeline_priorities` / `timelines`, and the `rebuild_zoom_out_ids()` RPC are all in place.
+- **`.env` files** (gitignored) hold hosted credentials:
+  - `tools/.env` — `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for the importer.
+  - Project root `.env` — `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` for the frontend dev build. Cloudflare Pages has the same two vars set in its build settings.
+- **Editor allowlist** at `editor_emails()` in `001_init_schema.sql` permits only `p.lilford@gmail.com` to write. Production Supabase Auth is wired to this email.
+- **Cloudflare Pages** serves https://ever-when.com from the `main` branch. Build command `npm run build`, output `dist/`. Auto-deploys on push.
+- **Bubblewrap TWA** packages the PWA as `com.everwhen.app` for Android. Asset-links file is at `/.well-known/assetlinks.json` (served via `public/_redirects` because dotfiles don't ship in `dist/` by default).
 
-2. **Update `.env` with hosted credentials.**
-   - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for the importer (keep these out of git — they should already be in `.gitignore`).
-   - `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the frontend.
-   - Don't commit either.
+### Deploying changes
 
-3. **Run the importer against hosted.**
-   - `cd tools && python -m v2.validate` first — exits non-zero on any data error.
-   - Then `python -m v2.import_v2`. Idempotent; safe to re-run.
-   - Verify in the Supabase dashboard: `select count(*) from occurrences` should be ~3,489.
+**Code changes (frontend):**
+1. Edit `src/*` — the change does NOT reach ever-when.com or the Android app until it's committed and pushed.
+2. `git add` → `git commit` → `git push origin main`.
+3. Cloudflare Pages builds and deploys in ~1–2 minutes. The PWA service worker has `autoUpdate` + `clientsClaim` + `skipWaiting`, so installed PWA / TWA users pick up the new bundle on next launch.
 
-4. **Confirm the editor allowlist.**
-   - `editor_emails()` in 001_init_schema.sql hard-codes `p.lilford@gmail.com`. Sign up via Supabase Auth with that address before testing edits.
+**Data changes (occurrences, priorities, timelines):**
+1. Edit `tools/v2/data/master.py` (directly or via a script in `tools/v2/curation/`).
+2. `cd tools && python -m v2.validate` — fail-fast check; exits non-zero on any error.
+3. `python -m v2.import_v2` — upserts to hosted Supabase. Idempotent. The hosted DB picks up changes immediately; the frontend reads on each load.
 
-5. **Pick a host for the PWA.** Cloudflare Pages, Vercel, or Netlify all work. Add the two `VITE_*` env vars to the host's settings. Point at the repo root, build command `npm run build`, output `dist/`.
-
-6. **Bubblewrap TWA for Android.** Once the PWA is live at a stable URL, `bubblewrap init --manifest=<url>/manifest.webmanifest`, then `bubblewrap build`. Publishing to Play Store needs the Asset Links file on the same domain so Android trusts the TWA.
+**Schema migrations:**
+1. Add a new `supabase/migrations/NNN_*.sql` file.
+2. Apply via the Supabase SQL editor (paste contents) or `supabase db push` if you've wired up the CLI.
+3. master.py + import_v2.py may need follow-up edits if the migration changes table shape.
 
 ## Gotchas worth remembering
 
@@ -178,6 +191,8 @@ In rough order. Everything builds on what comes before:
 - **Umbrella references (`first_zoom_out` / `second_zoom_out`) are matched by title string** in master.py. `validate.py` flags any reference that doesn't resolve. After bulk upsert, the importer calls `rebuild_zoom_out_ids()` RPC to populate the FK columns.
 - **`master.py` still has ~50 entries with `end_year=2026`.** The importer auto-translates these to `is_ongoing=true`. A future cleanup pass can rewrite master.py to use `is_ongoing: True` natively, but it's not blocking.
 - **vite-env.d.ts** at `src/vite-env.d.ts` is a single `/// <reference types="vite/client" />` line. Without it, `import.meta.env` doesn't typecheck.
+- **Frontend changes don't reach ever-when.com until pushed.** Editing `src/*` only updates local dev (`npm run dev`). The live site is whatever last built from `main` on Cloudflare Pages. If a fix "isn't working", check `git status` first.
+- **Search-pick zoom behaviour** (in `handlePickOccurrence`): clicking a search result auto-zooms to the entry's natural rollup level and force-shows it (exempts from rollup substitution + pins to front of placement queue). This is the only place where the renderer treats one entry preferentially; the override is scoped to the 2.2s flash window.
 
 ## How to read more
 

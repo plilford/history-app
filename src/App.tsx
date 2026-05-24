@@ -547,7 +547,54 @@ export default function App() {
       });
     }
 
-    if (target != null) scrollToYear(target);
+    // Set zoom so the occurrence renders at its natural rollup level.
+    // Without this, an umbrella period like the Hundred Years' War (a single
+    // row spanning 1337-1453) is invisible at the user's current zoom: zoom
+    // in and the umbrella is suppressed in favour of its leaf events; zoom
+    // out and it gets collapsed into a higher-level rollup umbrella or
+    // pushed off by higher-priority neighbours. Choose a target *visible*
+    // span based on the occurrence's own span (matching the rollup
+    // thresholds in TimelineColumn): leaves at <80yr, mid-period umbrellas
+    // in the 80-800yr band, era-spanning umbrellas at ≥800yr.
+    const main = mainRef.current;
+    if (target != null && main) {
+      const start = ev.start_year ?? target;
+      const end = ev.end_year ?? start;
+      const span = Math.max(0, end - start);
+      const naturalLevel = span > 800 ? 2 : span > 10 ? 1 : 0;
+      const targetVisibleSpan =
+        naturalLevel === 2 ? Math.max(800, span * 1.5) :
+        naturalLevel === 1 ? Math.max(80, span * 4) :
+        40;
+      const viewportH = Math.max(1, main.clientHeight - HEADER_HEIGHT_PX);
+      // Convert desired local-ppy at the target year back to the linear-band
+      // ppy `k` (the value held in pixelsPerYear). See yearScale.ts:
+      //   linear band  (t ≤ L):  localPpy = k
+      //   log band     (t > L):  localPpy = k * L / t
+      const desiredLocalPpy = viewportH / targetVisibleSpan;
+      const t = scale.yearMax - target;
+      const L = scale.linearRange;
+      const newPpy = t <= L ? desiredLocalPpy : (desiredLocalPpy * t) / L;
+      const clamped = Math.max(MIN_PPY, Math.min(MAX_PPY, newPpy));
+
+      if (Math.abs(clamped - pixelsPerYear) / Math.max(pixelsPerYear, clamped) > 0.05) {
+        // Zoom is changing meaningfully. Pin the target year at viewport
+        // centre across the change; the useLayoutEffect on `scale` will
+        // adjust scrollTop once the new scale renders. No separate
+        // scrollToYear call needed (and adding one races the layout effect).
+        pendingAnchorRef.current = {
+          year: target,
+          anchorPxFromTop: main.clientHeight / 2,
+        };
+        setPixelsPerYear(clamped);
+      } else {
+        // Zoom is already in the right ballpark — smooth-scroll only.
+        scrollToYear(target);
+      }
+    } else if (target != null) {
+      scrollToYear(target);
+    }
+
     setFlash({ id: ev.id, stamp: Date.now() });
   }
 
@@ -1669,25 +1716,34 @@ function TimelineColumn({
       referencedUmbrellaTitles.has(titleKey(e));
 
     // Substitute each entry with its rollup target if one applies.
+    // Exception: the just-flashed entry (typically from a search pick) is
+    // exempted from substitution and from the long-umbrella-at-leaf-zoom
+    // suppression — when a user searches for an umbrella they want to see
+    // THAT entry, not its parent or its leaves.
+    const flashedId = flash?.id ?? null;
     const seen = new Set<number>();
     const rolledEvents: EventWithPriority[] = [];
     for (const e of eventsAfterExclude) {
+      const isFlashed = e.id === flashedId;
       let target: EventWithPriority = e;
-      if (rollupLevel >= 2 && e.second_zoom_out) {
-        const u = umbrellaByTitle.get(e.second_zoom_out.trim().toLowerCase());
-        if (u) target = u;
-        else if (e.first_zoom_out) {
-          const u1 = umbrellaByTitle.get(e.first_zoom_out.trim().toLowerCase());
-          if (u1) target = u1;
+      if (!isFlashed) {
+        if (rollupLevel >= 2 && e.second_zoom_out) {
+          const u = umbrellaByTitle.get(e.second_zoom_out.trim().toLowerCase());
+          if (u) target = u;
+          else if (e.first_zoom_out) {
+            const u1 = umbrellaByTitle.get(e.first_zoom_out.trim().toLowerCase());
+            if (u1) target = u1;
+          }
+        } else if (rollupLevel >= 1 && e.first_zoom_out) {
+          const u = umbrellaByTitle.get(e.first_zoom_out.trim().toLowerCase());
+          if (u) target = u;
         }
-      } else if (rollupLevel >= 1 && e.first_zoom_out) {
-        const u = umbrellaByTitle.get(e.first_zoom_out.trim().toLowerCase());
-        if (u) target = u;
       }
       // At leaf zoom, hide event-type entries whose span exceeds 10 yr —
       // they're umbrella periods, only meant to render at rollup zoom.
       // (Person/art entries can have long spans and aren't umbrellas.)
-      if (rollupLevel === 0 && isLongUmbrella(target)) continue;
+      // Flashed entry bypasses this so a searched-for umbrella always shows.
+      if (rollupLevel === 0 && isLongUmbrella(target) && !isFlashed) continue;
       if (seen.has(target.id)) continue;
       seen.add(target.id);
       rolledEvents.push(target);
@@ -1703,7 +1759,16 @@ function TimelineColumn({
       }))
       // Drop occurrences whose region multiplier killed their priority.
       .filter((it) => it.priority > 0)
-      .sort((a, b) => b.priority - a.priority);
+      // Sort by priority desc, but pin the flashed entry to the front so it
+      // always wins its placement slot — even if higher-priority neighbours
+      // would normally crowd it out.
+      .sort((a, b) => {
+        if (flashedId != null) {
+          if (a.event.id === flashedId) return -1;
+          if (b.event.id === flashedId) return 1;
+        }
+        return b.priority - a.priority;
+      });
 
     const yearToTop = (y: number) => scale.yearToPx(y);
     const viewTop = viewportScrollTop - HEADER_HEIGHT_PX;

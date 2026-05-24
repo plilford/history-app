@@ -55,6 +55,10 @@ TIMELINES = [
     {"slug": "napoleonic",        "name": "Napoleonic Wars",       "display_order": 12, "is_featured": False},
     {"slug": "industrial",        "name": "Industrial Revolution", "display_order": 13, "is_featured": False},
     {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False},
+    {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False},
+    {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False},
+    {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False},
+    {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False},
 ]
 
 
