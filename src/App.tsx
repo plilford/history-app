@@ -49,9 +49,39 @@ const DEFAULT_PIXELS_PER_YEAR = 4;
 // for billion-year datasets.
 const LINEAR_RANGE_YEARS = 500;
 
-const COLUMN_WIDTH_PX = 288;          // matches Tailwind w-72
+const COLUMN_MIN_WIDTH_PX = 140;      // floor so phone columns stay readable
 const AXIS_WIDTH_PX = 72;
 const HEADER_HEIGHT_PX = 37;
+// Below this viewport width we render 2 timeline columns instead of 3, and the
+// header collapses (Phase 2). Matches Tailwind's `md` breakpoint.
+const MOBILE_BREAKPOINT_PX = 768;
+
+// Hook: tracks viewport width and derives how many timeline columns to show
+// + how wide each column should be. The third (or third + fourth) timeline
+// still exists in state on mobile — it's just clipped from render until the
+// viewport widens again (e.g. rotate to landscape).
+function useResponsiveLayout(desktopColumns: number) {
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const isMobile = viewportWidth < MOBILE_BREAKPOINT_PX;
+  const visibleColumnCount = isMobile ? 2 : desktopColumns;
+  // Subtract the year axis, then split the remainder evenly. The Math.max
+  // guard keeps columns from going below COLUMN_MIN_WIDTH_PX on very narrow
+  // phones — they'll overflow horizontally instead, which is preferable to
+  // unreadable widths.
+  const columnWidth = Math.max(
+    COLUMN_MIN_WIDTH_PX,
+    Math.floor((viewportWidth - AXIS_WIDTH_PX) / visibleColumnCount),
+  );
+  return { isMobile, visibleColumnCount, columnWidth };
+}
 
 // EVENT_BOX_HEIGHT_PX is now dynamic — see `boxHeight` derived from
 // occurrenceDensity (8-20) and the current viewport height. Older code paths
@@ -142,6 +172,12 @@ export default function App() {
   // rightmost slot so that a found occurrence lands in a visible timeline.
   const [timelineNames, setTimelineNames] = useState<string[]>(
     () => DEFAULT_TIMELINE_NAMES,
+  );
+  // Responsive layout: on phones we render fewer columns (2 vs 3) and resize
+  // each to fit. The clipped timelines stay in state — rotating to landscape
+  // brings them back.
+  const { visibleColumnCount, columnWidth } = useResponsiveLayout(
+    DEFAULT_TIMELINE_NAMES.length,
   );
   const [pixelsPerYear, setPixelsPerYear] = useState(DEFAULT_PIXELS_PER_YEAR);
   const [error, setError] = useState<string | null>(null);
@@ -365,12 +401,15 @@ export default function App() {
 
   // Render the columns in the user-controlled order (timelineNames), not by
   // their DB display_order. The .in() query above returns rows in any order.
+  // Clipped to visibleColumnCount so mobile shows 2 instead of 3 — the third
+  // is still in timelineNames state and reappears at >= MOBILE_BREAKPOINT_PX.
   const orderedTimelines = useMemo(() => {
     const byName = new Map(timelines.map((t) => [t.name, t]));
     return timelineNames
+      .slice(0, visibleColumnCount)
       .map((n) => byName.get(n))
       .filter((t): t is Timeline => t != null);
-  }, [timelines, timelineNames]);
+  }, [timelines, timelineNames, visibleColumnCount]);
 
   // Cross-timeline dedup: each non-master column reports the IDs it loaded;
   // we compute the union and pass it to any master column so that events
@@ -649,6 +688,76 @@ export default function App() {
       // still hit the same anchor year.
     };
 
+    // ----- Touch pinch zoom (Android / iOS, two-finger gesture) ------------
+    // The Safari `gesture*` events above don't fire on Android Chrome, and
+    // there's no ctrl+wheel from touch — only TouchEvents. Mirror the same
+    // zoom-anchored-at-a-fixed-year model:
+    //   1. On 2-finger touchstart, lock the anchor year at the midpoint of
+    //      the two fingers (not viewport centre — that's the standard
+    //      Maps/Photos feel).
+    //   2. On touchmove, ratio current finger distance to initial distance,
+    //      then apply incremental scale deltas via applyZoomStep.
+    //   3. Touchend with <2 fingers clears the pinch state; the
+    //      PINCH_TIMEOUT_MS window keeps the locked gestureAnchor alive
+    //      briefly to absorb trailing wheel events.
+    //   4. preventDefault on 2-finger touchmove only — single-finger
+    //      scrolling continues to work normally for navigating the timeline.
+    let touchInitialDistance = 0;
+    let touchLastScale = 1;
+    let touchPinchActive = false;
+
+    const distanceBetween = (a: Touch, b: Touch) =>
+      Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const midpointY = (a: Touch, b: Touch) => (a.clientY + b.clientY) / 2;
+
+    const onTouchStart = (ev: TouchEvent) => {
+      if (ev.touches.length < 2) return;
+      const target = ev.target as Node | null;
+      if (!target || !main.contains(target)) return;
+      const t1 = ev.touches[0];
+      const t2 = ev.touches[1];
+      touchInitialDistance = distanceBetween(t1, t2);
+      touchLastScale = 1;
+      touchPinchActive = true;
+      // Map the midpoint y from window coords to scroll-container coords,
+      // then to a year via the live scale. This becomes the zoom anchor.
+      const mainRect = main.getBoundingClientRect();
+      const anchorPxInViewport = midpointY(t1, t2) - mainRect.top;
+      const liveScale = scaleRef.current;
+      gestureAnchorYear = liveScale.pxToYear(
+        main.scrollTop + anchorPxInViewport - HEADER_HEIGHT_PX,
+      );
+      gestureAnchorPxFromTop = anchorPxInViewport;
+      lastPinchTs = performance.now();
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      if (!touchPinchActive || ev.touches.length < 2) return;
+      if (touchInitialDistance <= 0) return;
+      const target = ev.target as Node | null;
+      if (!target || !main.contains(target)) return;
+      ev.preventDefault();   // suppress browser native pinch-to-zoom-page
+      const t1 = ev.touches[0];
+      const t2 = ev.touches[1];
+      const dist = distanceBetween(t1, t2);
+      if (dist <= 0) return;
+      const totalScale = dist / touchInitialDistance;
+      const delta = totalScale / touchLastScale;
+      touchLastScale = totalScale;
+      lastPinchTs = performance.now();
+      applyZoomStep(delta);
+    };
+
+    const endTouchPinch = () => {
+      touchPinchActive = false;
+      touchInitialDistance = 0;
+      touchLastScale = 1;
+      // Leave gestureAnchorYear alone — PINCH_TIMEOUT_MS handles it.
+    };
+    const onTouchEnd = (ev: TouchEvent) => {
+      if (ev.touches.length < 2) endTouchPinch();
+    };
+
     document.addEventListener("wheel", onWheelCapture, {
       passive: false,
       capture: true,
@@ -656,11 +765,19 @@ export default function App() {
     main.addEventListener("gesturestart", onGestureStart as EventListener);
     main.addEventListener("gesturechange", onGestureChange as EventListener);
     main.addEventListener("gestureend", onGestureEnd as EventListener);
+    main.addEventListener("touchstart", onTouchStart, { passive: true });
+    main.addEventListener("touchmove",  onTouchMove,  { passive: false });
+    main.addEventListener("touchend",   onTouchEnd);
+    main.addEventListener("touchcancel", onTouchEnd);
     return () => {
       document.removeEventListener("wheel", onWheelCapture, { capture: true });
       main.removeEventListener("gesturestart", onGestureStart as EventListener);
       main.removeEventListener("gesturechange", onGestureChange as EventListener);
       main.removeEventListener("gestureend", onGestureEnd as EventListener);
+      main.removeEventListener("touchstart", onTouchStart);
+      main.removeEventListener("touchmove",  onTouchMove);
+      main.removeEventListener("touchend",   onTouchEnd);
+      main.removeEventListener("touchcancel", onTouchEnd);
     };
   }, []);
 
@@ -690,7 +807,7 @@ export default function App() {
   return (
     <div className="h-full flex flex-col">
       <header className="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
-        <h1 className="text-lg font-semibold">History Timelines</h1>
+        <h1 className="text-lg font-semibold">Ever-When</h1>
         <span
           className="text-xs text-slate-400 tabular-nums"
           title="Auto-fitted to the full extent of the data"
@@ -849,6 +966,7 @@ export default function App() {
               key={t.id}
               timeline={t}
               columnIndex={idx}
+              columnWidth={columnWidth}
               scale={scale}
               viewportScrollTop={viewport.scrollTop}
               viewportClientHeight={viewport.clientHeight}
@@ -1130,7 +1248,7 @@ type Placed = {
 
 // ----- Single timeline column ------------------------------------------------
 function TimelineColumn({
-  timeline, columnIndex, scale,
+  timeline, columnIndex, columnWidth, scale,
   viewportScrollTop, viewportClientHeight,
   boxHeightPx, regionFilter,
   dateDisplayMode,
@@ -1144,6 +1262,10 @@ function TimelineColumn({
 }: {
   timeline: Timeline;
   columnIndex: number;
+  /** Width of this column in CSS pixels. Responsive: ~288 on desktop, ~144 on
+   *  a 360px phone. Affects both the rendered <section> width and where the
+   *  multi-track range lines sit horizontally. */
+  columnWidth: number;
   scale: YearScale;
   viewportScrollTop: number; viewportClientHeight: number;
   boxHeightPx: number;
@@ -1658,7 +1780,7 @@ function TimelineColumn({
   return (
     <section
       className="relative flex-shrink-0 border-r border-slate-700"
-      style={{ width: COLUMN_WIDTH_PX }}
+      style={{ width: columnWidth }}
     >
       <h2
         className="sticky top-0 z-30 bg-slate-900 border-b border-slate-700 flex items-center"
@@ -1689,7 +1811,7 @@ function TimelineColumn({
             const renderBottom = Math.min(p.startTop, viewBottom);
             const h = renderBottom - renderTop;
             if (h > 0) {
-              const lineX = lineXForTrack(p.lineTrack, COLUMN_WIDTH_PX);
+              const lineX = lineXForTrack(p.lineTrack, columnWidth);
               // Centre the arrow's triangular base on the line, so the line's
               // 2-px stem runs straight into the middle of the arrow.
               const arrowLeft =
