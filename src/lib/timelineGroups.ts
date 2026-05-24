@@ -15,6 +15,7 @@ export type TimelineGroup =
   | "africa"
   | "australasia"
   | "conflicts"
+  | "religions"
   | "major-periods";
 
 // Display order — groups are rendered top-to-bottom in this order. Empty
@@ -27,6 +28,7 @@ export const TIMELINE_GROUP_ORDER: TimelineGroup[] = [
   "africa",
   "australasia",
   "conflicts",
+  "religions",
   "major-periods",
 ];
 
@@ -39,6 +41,7 @@ export const TIMELINE_GROUP_LABELS: Record<TimelineGroup, string> = {
   africa: "Africa",
   australasia: "Australasia",
   conflicts: "Conflicts",
+  religions: "Religions",
   "major-periods": "Major periods",
 };
 
@@ -66,6 +69,7 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   china: "asia",
   india: "asia",
   japan: "asia",
+  ottoman: "asia",
 
   // Conflicts — wars and inter-state confrontations
   ww1: "conflicts",
@@ -73,6 +77,12 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   "cold-war": "conflicts",
   napoleonic: "conflicts",
   crusades: "conflicts",
+
+  // Religions — major religious traditions
+  "major-religions": "religions",
+  christianity: "religions",
+  islam: "religions",
+  judaism: "religions",
 
   // Major periods — eras, movements
   renaissance: "major-periods",

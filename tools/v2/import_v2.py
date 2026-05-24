@@ -62,6 +62,11 @@ TIMELINES = [
     {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False},
     {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False},
     {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False},
+    {"slug": "ottoman",           "name": "Ottoman Empire",        "display_order": 22, "is_featured": False},
+    {"slug": "major-religions",   "name": "Major Religions",       "display_order": 23, "is_featured": False},
+    {"slug": "christianity",      "name": "Christianity",          "display_order": 24, "is_featured": False},
+    {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False},
+    {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False},
 ]
 
 
