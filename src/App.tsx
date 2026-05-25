@@ -2543,7 +2543,7 @@ function OccurrenceBox({
         <span> {event.title}</span>
         {event.description && (
           <span
-            className="text-slate-400"
+            className="text-slate-600 dark:text-slate-400"
             style={{ fontSize: descFontPx }}
           >
             {" "}
