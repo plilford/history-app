@@ -30,6 +30,12 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   /** When set, the heart button is disabled and clicking it opens the auth
    *  modal instead — supplied by the parent. */
   onSignInRequest?: () => void;
+  /** Number of children rolling up to this entry. 0 = not an umbrella; the
+   *  ⊞-N badge is suppressed. */
+  childCount?: number;
+  /** Click handler for the umbrella stack badge — opens the ChildrenPopup
+   *  at the app level. */
+  onShowChildren?: (event: EventWithPriority) => void;
 }>(function EventPopup({
   event,
   anchorRect,
@@ -38,6 +44,8 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   onClose,
   onFavourited,
   onSignInRequest,
+  childCount = 0,
+  onShowChildren,
 }, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,6 +143,21 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             {(event.display_date ?? event.start_year ?? "") +
               (event.date_uncertain && !String(event.display_date ?? "").endsWith("*") ? "*" : "")}
           </span>
+          {childCount > 0 && onShowChildren && (
+            <button
+              type="button"
+              onClick={() => {
+                onShowChildren(event);
+                onClose();
+              }}
+              aria-label={`Show ${childCount} children of ${event.title}`}
+              title={`${childCount} children — click to list`}
+              className="shrink-0 -mt-1 h-7 px-1.5 flex items-baseline gap-0.5 rounded font-bold text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
+            >
+              <span aria-hidden className="text-base leading-none">⊞</span>
+              <span aria-hidden className="text-sm tabular-nums">{childCount}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleFavouriteClick}
@@ -152,13 +175,13 @@ export const EventPopup = forwardRef<HTMLDivElement, {
                   ? "Remove from favourites"
                   : "Add to favourites"
             }
-            className={`shrink-0 -mt-1 w-7 h-7 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 ${
+            className={`shrink-0 -mt-1 w-8 h-8 flex items-center justify-center rounded font-bold hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 ${
               fav
-                ? "text-rose-400 hover:text-rose-300"
+                ? "text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300"
                 : "text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             }`}
           >
-            <span aria-hidden className="text-sm leading-none">
+            <span aria-hidden className="text-lg leading-none">
               {fav ? "♥" : "♡"}
             </span>
           </button>

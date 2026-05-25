@@ -1394,6 +1394,12 @@ function AppInner() {
             setHovered(null);
             setAuthModalOpen(true);
           }}
+          childCount={umbrellaCounts.get(hovered.event.id) ?? 0}
+          onShowChildren={(ev) => {
+            clearTimers();
+            setHovered(null);
+            setUmbrellaForChildren(ev);
+          }}
         />
       )}
 
@@ -1506,7 +1512,7 @@ function YearAxis({
               className="absolute left-0 right-0 flex items-center"
               style={{ top }}
             >
-              <span className="text-[10px] text-slate-400 pr-1">
+              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 pr-1">
                 {compactYearLabel(y)}
               </span>
               <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
@@ -1523,7 +1529,7 @@ function YearAxis({
               style={{ top }}
             >
               <span
-                className={`text-[10px] pr-1 ${t.isMajor ? "text-slate-700 dark:text-slate-300 font-medium" : "text-slate-500"}`}
+                className={`text-[10px] font-bold pr-1 ${t.isMajor ? "text-slate-800 dark:text-slate-200" : "text-slate-600 dark:text-slate-400"}`}
               >
                 {t.label}
               </span>
@@ -2627,36 +2633,41 @@ function OccurrenceBox({
           </span>
         )}
       </div>
-      {isFavourite && (
-        <span
-          aria-hidden
-          title="Favourite"
-          className="absolute top-0.5 right-1 text-rose-400 pointer-events-none leading-none"
-          style={{ fontSize: Math.max(10, Math.min(14, titleFontPx - 2)) }}
+      {(isFavourite || childCount > 0) && (
+        <div
+          className="absolute bottom-0.5 right-1 flex items-baseline gap-1.5 leading-none font-bold"
+          style={{ fontSize: Math.max(12, Math.min(18, titleFontPx)) }}
         >
-          ♥
-        </span>
-      )}
-      {childCount > 0 && (
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            // Stop the box's hover/tap binding from firing — we want the
-            // popup to open, not the EventPopup to flash in.
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowChildren(event);
-          }}
-          aria-label={`Show ${childCount} children of ${event.title}`}
-          title={`${childCount} children — click to list`}
-          className="absolute top-0.5 left-1 flex items-baseline gap-0.5 leading-none text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white"
-          style={{ fontSize: Math.max(9, Math.min(12, titleFontPx - 3)) }}
-        >
-          <span aria-hidden>⊞</span>
-          <span aria-hidden className="tabular-nums">{childCount}</span>
-        </button>
+          {childCount > 0 && (
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                // Stop the box's hover/tap binding from firing — we want
+                // the children popup to open, not the EventPopup.
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowChildren(event);
+              }}
+              aria-label={`Show ${childCount} children of ${event.title}`}
+              title={`${childCount} children — click to list`}
+              className="flex items-baseline gap-0.5 leading-none text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300"
+            >
+              <span aria-hidden>⊞</span>
+              <span aria-hidden className="tabular-nums">{childCount}</span>
+            </button>
+          )}
+          {isFavourite && (
+            <span
+              aria-hidden
+              title="Favourite"
+              className="text-rose-500 dark:text-rose-400 pointer-events-none"
+            >
+              ♥
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
