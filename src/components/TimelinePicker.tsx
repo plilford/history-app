@@ -7,6 +7,11 @@ import {
   groupForSlug,
   type TimelineGroup,
 } from "../lib/timelineGroups";
+import {
+  FAVOURITES_TIMELINE_ID,
+  FAVOURITES_TIMELINE_NAME,
+  FAVOURITES_TIMELINE_SLUG,
+} from "../lib/favouritesTimeline";
 
 /**
  * Popover used to swap the timeline shown in a column. Mounted as a child of
@@ -26,6 +31,7 @@ export function TimelinePicker({
   anchorRect,
   onPick,
   onClose,
+  showFavourites = false,
 }: {
   /** Name of the timeline currently shown in the column being edited. */
   currentName: string;
@@ -33,6 +39,9 @@ export function TimelinePicker({
   anchorRect: DOMRect;
   onPick: (name: string) => void;
   onClose: () => void;
+  /** When true (= user is signed in), prepend the "My Favourites"
+   *  pseudo-timeline at the top of the list. */
+  showFavourites?: boolean;
 }) {
   const [allTimelines, setAllTimelines] = useState<Timeline[]>([]);
   const [query, setQuery] = useState("");
@@ -111,12 +120,27 @@ export function TimelinePicker({
 
   // ----- Filtering + autofill --------------------------------------------
   // `filtered` is sorted into our display groups (Worldwide, Europe, Americas,
-  // Asia, Conflicts, Major periods, …). The flat `filtered` array preserves
-  // the rendering order; `groupBoundaries` records where group headers should
-  // be inserted by the render code. Keyboard navigation still walks the flat
-  // array — headers are visual-only.
-  const { filtered, groupBoundaries } = useMemo(() => {
+  // Asia, Conflicts, Major periods, …) with the special "My Favourites"
+  // pseudo-timeline (when the user is signed in) pinned at the very top. The
+  // flat `filtered` array preserves the rendering order; `groupBoundaries`
+  // records where group headers should be inserted by the render code.
+  // Keyboard navigation still walks the flat array — headers are visual-only.
+  const favouritesTimeline: Timeline = useMemo(
+    () => ({
+      id: FAVOURITES_TIMELINE_ID,
+      name: FAVOURITES_TIMELINE_NAME,
+      slug: FAVOURITES_TIMELINE_SLUG,
+      display_order: -1,
+      is_featured: false,
+    }),
+    [],
+  );
+
+  const { filtered, groupBoundaries, favouritesHeaderLabel } = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const matchesFavourites =
+      showFavourites &&
+      (q === "" || FAVOURITES_TIMELINE_NAME.toLowerCase().includes(q));
     const matches = q
       ? allTimelines.filter((t) => t.name.toLowerCase().includes(q))
       : allTimelines;
@@ -128,22 +152,37 @@ export function TimelinePicker({
       if (!arr) { arr = []; buckets.set(g, arr); }
       arr.push(t);
     }
-    // Concat in canonical group order. Empty groups skipped.
+    // Concat: favourites first (if visible), then the canonical group order.
     const flat: Timeline[] = [];
     const boundaries: { index: number; group: TimelineGroup }[] = [];
+    let favLabel: string | null = null;
+    if (matchesFavourites) {
+      favLabel = "Yours";
+      flat.push(favouritesTimeline);
+    }
     for (const g of TIMELINE_GROUP_ORDER) {
       const arr = buckets.get(g);
       if (!arr || arr.length === 0) continue;
       boundaries.push({ index: flat.length, group: g });
       flat.push(...arr);
     }
-    return { filtered: flat, groupBoundaries: boundaries };
-  }, [allTimelines, query]);
+    return {
+      filtered: flat,
+      groupBoundaries: boundaries,
+      favouritesHeaderLabel: favLabel,
+    };
+  }, [allTimelines, query, showFavourites, favouritesTimeline]);
 
   const autofillSuggestion = useMemo(() => {
     const q = query.trim();
     if (!q) return "";
     const lower = q.toLowerCase();
+    if (
+      showFavourites &&
+      FAVOURITES_TIMELINE_NAME.toLowerCase().startsWith(lower)
+    ) {
+      return FAVOURITES_TIMELINE_NAME.slice(q.length);
+    }
     const hit = allTimelines.find((t) =>
       t.name.toLowerCase().startsWith(lower),
     );
@@ -151,7 +190,7 @@ export function TimelinePicker({
     // The grey ghost text is the *remainder* after what the user has typed.
     // We try to preserve the user's casing for the prefix portion.
     return hit.name.slice(q.length);
-  }, [allTimelines, query]);
+  }, [allTimelines, query, showFavourites]);
 
   // Keep highlight in bounds after filtering shrinks the list.
   useEffect(() => {
@@ -304,6 +343,16 @@ export function TimelinePicker({
             // skip them; keyboard navigation also skips them because hi
             // walks the flat `filtered` array, which doesn't include headers.
             const boundary = groupBoundaries.find((b) => b.index === i);
+            const favHeader =
+              i === 0 && favouritesHeaderLabel ? (
+                <li
+                  key="hdr-favourites"
+                  role="presentation"
+                  className="px-2 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-500 select-none"
+                >
+                  {favouritesHeaderLabel}
+                </li>
+              ) : null;
             const header = boundary ? (
               <li
                 key={`hdr-${boundary.group}`}
@@ -316,7 +365,9 @@ export function TimelinePicker({
 
             const active = i === hi;
             const isCurrent = t.name === currentName;
+            const isFavRow = t.slug === FAVOURITES_TIMELINE_SLUG;
             return [
+              favHeader,
               header,
               <li
                 key={t.id}
@@ -335,6 +386,9 @@ export function TimelinePicker({
                 }`}
                 title={t.slug}
               >
+                {isFavRow && (
+                  <span aria-hidden className="text-rose-400 shrink-0">♥</span>
+                )}
                 <span className="truncate flex-1">{t.name}</span>
                 {isCurrent && (
                   <span className="text-[10px] text-slate-500 shrink-0">

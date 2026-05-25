@@ -4,6 +4,11 @@ import type { Timeline, EventWithPriority, HistoryEvent } from "./types/database
 import { EventPopup } from "./components/EventPopup";
 import { SearchBar } from "./components/SearchBar";
 import { TimelinePicker } from "./components/TimelinePicker";
+import { AuthModal } from "./components/AuthModal";
+import { SuggestionsPopup } from "./components/SuggestionsPopup";
+import { AuthProvider, useAuth } from "./lib/auth";
+import { FavouritesProvider, useFavourites } from "./lib/favourites";
+import { FAVOURITES_TIMELINE_NAME, FAVOURITES_TIMELINE_SLUG } from "./lib/favouritesTimeline";
 import {
   addUncertaintyMark,
   formatPartial,
@@ -184,6 +189,22 @@ function compactYearLabel(y: number): string {
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <FavouritesProvider>
+        <AppInner />
+      </FavouritesProvider>
+    </AuthProvider>
+  );
+}
+
+function AppInner() {
+  const { user, signOut } = useAuth();
+  const { ids: favouriteIds, isFavourite } = useFavourites();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  /** When set, the SuggestionsPopup is open seeded on this occurrence. */
+  const [suggestionSeed, setSuggestionSeed] = useState<EventWithPriority | null>(null);
+
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   // Names of the columns to render, in display order. Search may replace the
   // rightmost slot so that a found occurrence lands in a visible timeline.
@@ -456,7 +477,9 @@ export default function App() {
 
   useEffect(() => {
     setError(null);
-    if (timelineNames.length === 0) {
+    // Skip DB fetch when the only requested name is the favourites sentinel.
+    const realNames = timelineNames.filter((n) => n !== FAVOURITES_TIMELINE_NAME);
+    if (realNames.length === 0) {
       setTimelines([]);
       return;
     }
@@ -465,7 +488,7 @@ export default function App() {
       const { data, error } = await supabase
         .from("timelines")
         .select("*")
-        .in("name", timelineNames);
+        .in("name", realNames);
       if (cancelled) return;
       if (error) setError(error.message);
       else setTimelines(data ?? []);
@@ -475,17 +498,32 @@ export default function App() {
     };
   }, [timelineNames]);
 
+  // Synthetic Timeline row for the favourites pseudo-timeline. Same shape as
+  // a real timelines row so TimelineColumn can render it (with a custom
+  // fetch path when timeline.slug === FAVOURITES_TIMELINE_SLUG).
+  const favouritesTimeline: Timeline = useMemo(
+    () => ({
+      id: -1,
+      name: FAVOURITES_TIMELINE_NAME,
+      slug: FAVOURITES_TIMELINE_SLUG,
+      display_order: -1,
+      is_featured: false,
+    }),
+    [],
+  );
+
   // Render the columns in the user-controlled order (timelineNames), not by
   // their DB display_order. The .in() query above returns rows in any order.
   // Clipped to visibleColumnCount so mobile shows 2 instead of 3 — the third
   // is still in timelineNames state and reappears at >= MOBILE_BREAKPOINT_PX.
   const orderedTimelines = useMemo(() => {
-    const byName = new Map(timelines.map((t) => [t.name, t]));
+    const byName = new Map<string, Timeline>(timelines.map((t) => [t.name, t]));
+    byName.set(FAVOURITES_TIMELINE_NAME, favouritesTimeline);
     return timelineNames
       .slice(0, visibleColumnCount)
       .map((n) => byName.get(n))
       .filter((t): t is Timeline => t != null);
-  }, [timelines, timelineNames, visibleColumnCount]);
+  }, [timelines, timelineNames, visibleColumnCount, favouritesTimeline]);
 
   // Cross-timeline dedup: each non-master column reports the IDs it loaded;
   // we compute the union and pass it to any master column so that events
@@ -1115,6 +1153,29 @@ export default function App() {
           {regionsToggle}
         </div>
 
+        {/* Account button — sign in / sign out. Shown on desktop alongside
+            zoom buttons; on mobile it lives inside the hamburger menu below. */}
+        <div className="hidden md:flex">
+          {user ? (
+            <button
+              type="button"
+              onClick={() => signOut()}
+              title={`Signed in as ${user.email ?? "user"} — click to sign out`}
+              className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAuthModalOpen(true)}
+              className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+            >
+              Sign in
+            </button>
+          )}
+        </div>
+
         {zoomButtons}
 
         {/* Hamburger menu — phone only. */}
@@ -1157,6 +1218,30 @@ export default function App() {
             {showRegionPanel && (
               <div className="pt-2 border-t border-slate-800">{regionPanel}</div>
             )}
+            <div className="pt-2 border-t border-slate-800">
+              {user ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-400 truncate">
+                    {user.email ?? "Signed in"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                    className="shrink-0 px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
+                  className="w-full px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+                >
+                  Sign in / Sign up
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1212,6 +1297,9 @@ export default function App() {
               flash={flash}
               onEventsLoaded={handleColumnEventsLoaded}
               excludeIds={t.slug === "master" ? masterExcludeIds : null}
+              favouriteIds={favouriteIds}
+              isFavourite={isFavourite}
+              userId={user?.id ?? null}
             />
           ))}
         </div>
@@ -1225,6 +1313,17 @@ export default function App() {
           onMouseEnter={handlePopupEnter}
           onMouseLeave={handlePopupLeave}
           onClose={() => { clearTimers(); setHovered(null); }}
+          onFavourited={(ev) => {
+            // Close the hover popup and open the suggestions modal.
+            clearTimers();
+            setHovered(null);
+            setSuggestionSeed(ev);
+          }}
+          onSignInRequest={() => {
+            clearTimers();
+            setHovered(null);
+            setAuthModalOpen(true);
+          }}
         />
       )}
 
@@ -1234,6 +1333,23 @@ export default function App() {
           anchorRect={picker.anchorRect}
           onPick={handlePickTimeline}
           onClose={() => setPicker(null)}
+          showFavourites={user != null}
+        />
+      )}
+
+      {authModalOpen && (
+        <AuthModal onClose={() => setAuthModalOpen(false)} />
+      )}
+
+      {suggestionSeed && (
+        <SuggestionsPopup
+          seed={suggestionSeed}
+          onClose={() => setSuggestionSeed(null)}
+          onPickOccurrence={(occ) => {
+            // Reuse the existing search-pick handler — it navigates the
+            // timeline to the occurrence's year and flashes its box.
+            handlePickOccurrence(occ as HistoryEvent);
+          }}
         />
       )}
     </div>
@@ -1490,6 +1606,9 @@ function TimelineColumn({
   flash,
   onEventsLoaded,
   excludeIds,
+  favouriteIds,
+  isFavourite,
+  userId,
 }: {
   timeline: Timeline;
   columnIndex: number;
@@ -1519,6 +1638,11 @@ function TimelineColumn({
    *  (the master column hides events already shown in another visible
    *  column). null/undefined = no exclusion. */
   excludeIds?: Set<number> | null;
+  /** Current user's favourite occurrence IDs. Triggers a re-fetch on the
+   *  favourites pseudo-timeline when the set changes. */
+  favouriteIds: Set<number>;
+  isFavourite: (id: number) => boolean;
+  userId: string | null;
 }) {
   const { yearMin, yearMax, totalHeight } = scale;
   const [events, setEvents] = useState<EventWithPriority[]>([]);
@@ -1533,8 +1657,43 @@ function TimelineColumn({
   // priorities exactly as the DB returns them.
   const regionWeighted = REGION_WEIGHTED_SLUGS.has(timeline.slug);
 
+  const isFavouritesTimeline = timeline.slug === FAVOURITES_TIMELINE_SLUG;
+  // Snapshot of favourite IDs we last fetched on — re-run fetch only when the
+  // set changes (Set identity changes on every toggle).
+  const favIdsKey = useMemo(
+    () => (isFavouritesTimeline ? Array.from(favouriteIds).sort((a, b) => a - b).join(",") : ""),
+    [favouriteIds, isFavouritesTimeline],
+  );
+
   useEffect(() => {
     (async () => {
+      // --- Favourites pseudo-timeline ---------------------------------------
+      // Fetch occurrences by ID from the user's favourites Set. Skip when
+      // signed out (no favourites possible) or when the set is empty.
+      if (isFavouritesTimeline) {
+        if (!userId || favouriteIds.size === 0) {
+          setEvents([]);
+          if (onEventsLoaded) onEventsLoaded(columnIndex, []);
+          return;
+        }
+        const idsArr = Array.from(favouriteIds);
+        const { data, error } = await supabase
+          .from("occurrences")
+          .select("*")
+          .in("id", idsArr);
+        if (error) { console.error(error); return; }
+        // No priority column to sort by — fabricate a constant priority of
+        // 100_000 so every favourite shares the same baseline; the placement
+        // loop falls back to year/precision for ordering.
+        const rows = (data ?? []).map((r: any) => ({
+          ...normalizeOngoing(r),
+          priority: 100_000,
+        })) as EventWithPriority[];
+        setEvents(rows);
+        if (onEventsLoaded) onEventsLoaded(columnIndex, rows.map((r) => r.id));
+        return;
+      }
+
       const { data, error } = await supabase
         .from("occurrence_timeline_priorities")
         .select("priority, occurrences!inner(*)")
@@ -1563,7 +1722,7 @@ function TimelineColumn({
     // callback from the parent and we only want the fetch to re-run on
     // timeline/year-range changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeline.id, yearMin, yearMax, columnIndex]);
+  }, [timeline.id, timeline.slug, yearMin, yearMax, columnIndex, userId, favIdsKey]);
 
   // ----- Auto-centre on the nearest occurrence after a swap ---------------
   // When the user picks a new timeline for this column, the parent passes us
@@ -2129,6 +2288,7 @@ function TimelineColumn({
                 onEnter={onBoxEnter}
                 onLeave={onBoxLeave}
                 flashStamp={flash && flash.id === p.event.id ? flash.stamp : null}
+                isFavourite={isFavourite(p.event.id)}
               />
             </div>
           );
@@ -2250,6 +2410,7 @@ function adaptiveDateLabel(
 
 function OccurrenceBox({
   top, heightPx, event, color, granularity, onEnter, onLeave, flashStamp,
+  isFavourite,
 }: {
   top: number;
   heightPx: number;
@@ -2259,6 +2420,8 @@ function OccurrenceBox({
   onEnter: HoverHandler;
   onLeave: () => void;
   flashStamp: number | null;
+  /** When true, renders a small heart badge in the corner of the box. */
+  isFavourite: boolean;
 }) {
   const bind = useHoverBinding(event, onEnter, onLeave);
 
@@ -2319,6 +2482,16 @@ function OccurrenceBox({
           </span>
         )}
       </div>
+      {isFavourite && (
+        <span
+          aria-hidden
+          title="Favourite"
+          className="absolute top-0.5 right-1 text-rose-400 pointer-events-none leading-none"
+          style={{ fontSize: Math.max(10, Math.min(14, titleFontPx - 2)) }}
+        >
+          ♥
+        </span>
+      )}
     </div>
   );
 }

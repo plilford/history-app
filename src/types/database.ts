@@ -89,6 +89,12 @@ export interface OccurrenceWithPriority extends Occurrence {
   priority: number;
 }
 
+export interface UserFavourite {
+  user_id: string;
+  occurrence_id: number;
+  created_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Legacy aliases. App.tsx and components reference these names throughout;
 // keeping them as type aliases avoids a large rename churn while the schema

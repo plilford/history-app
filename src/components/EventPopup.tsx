@@ -5,6 +5,8 @@ import {
   wikiTitleFromUrl,
   type WikiSummary,
 } from "../lib/wikipedia";
+import { useAuth } from "../lib/auth";
+import { useFavourites } from "../lib/favourites";
 
 const POPUP_WIDTH = 360;
 const POPUP_MAX_HEIGHT = 420;
@@ -22,15 +24,37 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   /** Tap close (×) and tap-outside dismiss. Required for touch devices where
    *  mouseleave never fires. */
   onClose: () => void;
+  /** When the user adds this occurrence to favourites, the parent shows the
+   *  SuggestionsPopup. Not called on un-favourite. */
+  onFavourited?: (event: EventWithPriority) => void;
+  /** When set, the heart button is disabled and clicking it opens the auth
+   *  modal instead — supplied by the parent. */
+  onSignInRequest?: () => void;
 }>(function EventPopup({
   event,
   anchorRect,
   onMouseEnter,
   onMouseLeave,
   onClose,
+  onFavourited,
+  onSignInRequest,
 }, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const { isFavourite, toggle } = useFavourites();
+  const fav = isFavourite(event.id);
+
+  async function handleFavouriteClick() {
+    if (!user) {
+      onSignInRequest?.();
+      return;
+    }
+    const wasFav = fav;
+    const isNowFav = await toggle(event.id);
+    // Only trigger suggestions on add, not remove.
+    if (!wasFav && isNowFav) onFavourited?.(event);
+  }
 
   useEffect(() => {
     const title = wikiTitleFromUrl(event.wikipedia_link);
@@ -111,6 +135,33 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             {(event.display_date ?? event.start_year ?? "") +
               (event.date_uncertain && !String(event.display_date ?? "").endsWith("*") ? "*" : "")}
           </span>
+          <button
+            type="button"
+            onClick={handleFavouriteClick}
+            aria-label={
+              !user
+                ? "Sign in to favourite"
+                : fav
+                  ? "Remove from favourites"
+                  : "Add to favourites"
+            }
+            title={
+              !user
+                ? "Sign in to favourite"
+                : fav
+                  ? "Remove from favourites"
+                  : "Add to favourites"
+            }
+            className={`shrink-0 -mt-1 w-7 h-7 flex items-center justify-center rounded hover:bg-slate-700 focus:outline-none focus:bg-slate-700 ${
+              fav
+                ? "text-rose-400 hover:text-rose-300"
+                : "text-slate-400 hover:text-slate-100"
+            }`}
+          >
+            <span aria-hidden className="text-sm leading-none">
+              {fav ? "♥" : "♡"}
+            </span>
+          </button>
           <button
             type="button"
             onClick={onClose}
