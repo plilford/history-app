@@ -1,0 +1,86 @@
+78 post-1500 year-only point entries (excluding periods, ongoing, date_uncertain)
+  Easy hits (title contains battle/treaty/act/...): 11
+  Other:                                            67
+
+--- Easy hits (sorted newest first) ---
+  1004821   1991  START I treaty signed
+  1004746   1989  Hungarian border opens
+  1004818   1979  Salt II treaty signed
+  1004729   1972  Salt I treaty signed
+  1004730   1972  ABM Treaty signed
+  1004816   1968  Treaty on the Non-Proliferation of Nuclear Weapons (NPT)
+  1004815   1966  Tashkent Declaration
+  1004722   1963  Partial Nuclear Test Ban Treaty
+  1004758   1949  Greek Civil War ends
+  1005809   1599  Globe Theatre opens
+  1006528   1533  Act in Restraint of Appeals
+
+--- Other candidates (sorted newest first) ---
+  1004756   1991  Belavezha Accords
+  1004757   1991  Resignation of Gorbachev
+  1004752   1990  Lithuania declares independence
+  1004743   1989  Soviet withdrawal from Afghanistan
+  1004745   1989  Polish elections of 1989
+  1004749   1989  Bulgarian transition from communism
+  1004751   1989  Baltic Way protest
+  1006617   1989  Revolutions of 1989
+  1004786   1988  Iran Air Flight 655 shot down
+  1004822   1987  Reagan visits Berlin Wall
+  1004738   1983  KAL 007 shot down
+  1004739   1983  SDI (Star Wars) announced
+  1004819   1983  Reagan's 'Evil Empire' speech
+  1004731   1975  Helsinki Accords
+  1004811   1975  Apollo-Soyuz Test Project
+  1004800   1973  Solzhenitsyn's The Gulag Archipelago
+  1004727   1968  Brezhnev Doctrine
+  1004723   1964  Khrushchev ousted
+  1004725   1964  Gulf of Tonkin Resolution
+  1004770   1962  Cuban embargo by the US
+  1004718   1960  U-2 incident
+  1004769   1959  Castro takes Havana
+  1004810   1959  Kitchen Debate
+  1004716   1956  Khrushchev's Secret Speech
+  1004806   1956  East Germany joins Warsaw Pact
+  1004717   1955  Warsaw Pact founded
+  1004714   1953  Korean War armistice
+  1004715   1953  Death of Stalin
+  1004761   1953  Iranian coup d'état of 1953
+  1004712   1950  NSC-68 secret memorandum
+  1004709   1949  Comecon established
+  1004710   1949  Soviet atomic bomb test (RDS-1)
+  1004711   1949  Chinese Communist victory
+  1006098   1948  Marshall Plan funds reach Germany
+  1004704   1947  Marshall Plan announcement
+  1004705   1947  Comintern reconstituted as Cominform
+  1004702   1946  Long Telegram
+  1006611   1943  Lech Wałęsa
+  1006855   1905  Einstein's miracle year (Annus Mirabilis)
+  1004461   1848  Doctrine of Lapse
+  1006719   1830  Liberty Leading the People
+  1006596   1804  Sokoto Caliphate founded
+  1006418   1793  Cotton gin invented
+  1006675   1792  A Vindication of the Rights of Woman
+  1006417   1785  Cartwright's power loom
+  1006416   1779  Crompton's spinning mule
+  1006414   1769  Arkwright's water frame
+  1006669   1748  Montesquieu's The Spirit of the Laws
+  1004095   1735  Linnaeus's Systema Naturae
+  1006412   1733  Flying shuttle invented
+  1005836   1720  South Sea Bubble bursts
+  1006410   1712  Newcomen atmospheric engine
+  1006411   1709  Abraham Darby's coke-fired blast furnace
+  1006667   1689  Locke's Two Treatises of Government
+  1005828   1678  Popish Plot
+  1005827   1673  Test Acts
+  1006687   1672  Royal African Company founded
+  1004191   1670  Pascal's Pensées
+  1006531   1611  King James Bible
+  1004156   1565  Tintoretto's Crucifixion at Scuola di San Rocco
+  1004443   1564  Akbar's policy of religious tolerance (sulh-i-kul)
+  1004157   1563  Veronese's The Wedding at Cana
+  1005805   1559  Elizabethan Religious Settlement
+  1006726   1559  Index Librorum Prohibitorum
+  1006219   1543  Arrival of Portuguese traders
+  1006662   1543  Vesalius's De humani corporis fabrica
+  1006342   1542  Bartolomé de las Casas defends indigenous rights
+

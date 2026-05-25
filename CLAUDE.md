@@ -53,7 +53,7 @@ RLS:
 
 ## Authoring new occurrences
 
-The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **~3,902 entries**, max ID around **1_006_119**. New IDs should continue from there, contiguous within a batch. (Run `python -c "from v2.data.master import OCCURRENCES; print(max(o['id'] for o in OCCURRENCES))"` to get the precise current max.)
+The data lives in `tools/v2/data/master.py` as a single `OCCURRENCES = [...]` list of dicts. `python -m v2.import_v2` reads it, upserts into `occurrences`, and replaces `occurrence_timeline_priorities` for those IDs. Current size: **~4,318 entries**, max ID around **1_007_020**. New IDs should continue from there, contiguous within a batch. (Run `python -c "from v2.data.master import OCCURRENCES; print(max(o['id'] for o in OCCURRENCES))"` to get the precise current max.)
 
 ### Entry shape
 
