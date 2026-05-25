@@ -6,6 +6,7 @@ import { SearchBar } from "./components/SearchBar";
 import { TimelinePicker } from "./components/TimelinePicker";
 import { AuthModal } from "./components/AuthModal";
 import { SuggestionsPopup } from "./components/SuggestionsPopup";
+import { ChildrenPopup } from "./components/ChildrenPopup";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
 import { ThemeProvider, useTheme } from "./lib/theme";
@@ -208,6 +209,9 @@ function AppInner() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   /** When set, the SuggestionsPopup is open seeded on this occurrence. */
   const [suggestionSeed, setSuggestionSeed] = useState<EventWithPriority | null>(null);
+  /** When set, the ChildrenPopup is open showing rollup children of this
+   *  umbrella entry. */
+  const [umbrellaForChildren, setUmbrellaForChildren] = useState<HistoryEvent | null>(null);
 
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   // Names of the columns to render, in display order. Search may replace the
@@ -376,6 +380,52 @@ function AppInner() {
   const [dataRange, setDataRange] = useState<{ min: number; max: number } | null>(null);
   const yearMin = dataRange?.min ?? FALLBACK_YEAR_MIN;
   const yearMax = dataRange?.max ?? FALLBACK_YEAR_MAX;
+
+  // Map of umbrella occurrence_id → number of children (rows where
+  // first_zoom_out_id or second_zoom_out_id points at this id). Used to
+  // render a stack icon + count on umbrella boxes in every timeline.
+  // Fetched ONCE at app load — the data rarely changes during a session.
+  const [umbrellaCounts, setUmbrellaCounts] = useState<Map<number, number>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Paginate through occurrences pulling just (id, first_zoom_out_id,
+      // second_zoom_out_id). PostgREST caps each page at 1000 rows.
+      const map = new Map<number, number>();
+      let offset = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await supabase
+          .from("occurrences")
+          .select("first_zoom_out_id, second_zoom_out_id")
+          .or("first_zoom_out_id.not.is.null,second_zoom_out_id.not.is.null")
+          .range(offset, offset + 999);
+        if (error) {
+          console.error("umbrella-count fetch failed", error);
+          return;
+        }
+        const rows = data ?? [];
+        for (const r of rows as Array<{ first_zoom_out_id: number | null; second_zoom_out_id: number | null }>) {
+          if (r.first_zoom_out_id != null) {
+            map.set(r.first_zoom_out_id, (map.get(r.first_zoom_out_id) ?? 0) + 1);
+          }
+          if (r.second_zoom_out_id != null) {
+            map.set(r.second_zoom_out_id, (map.get(r.second_zoom_out_id) ?? 0) + 1);
+          }
+        }
+        if (rows.length < 1000) break;
+        offset += 1000;
+      }
+      if (cancelled) return;
+      setUmbrellaCounts(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1318,6 +1368,8 @@ function AppInner() {
               favouriteIds={favouriteIds}
               isFavourite={isFavourite}
               userId={user?.id ?? null}
+              umbrellaCounts={umbrellaCounts}
+              onShowChildren={setUmbrellaForChildren}
             />
           ))}
         </div>
@@ -1368,6 +1420,14 @@ function AppInner() {
             // timeline to the occurrence's year and flashes its box.
             handlePickOccurrence(occ as HistoryEvent);
           }}
+        />
+      )}
+
+      {umbrellaForChildren && (
+        <ChildrenPopup
+          umbrella={umbrellaForChildren}
+          onClose={() => setUmbrellaForChildren(null)}
+          onPickOccurrence={(occ) => handlePickOccurrence(occ as HistoryEvent)}
         />
       )}
     </div>
@@ -1632,6 +1692,8 @@ function TimelineColumn({
   favouriteIds,
   isFavourite,
   userId,
+  umbrellaCounts,
+  onShowChildren,
 }: {
   timeline: Timeline;
   columnIndex: number;
@@ -1666,6 +1728,12 @@ function TimelineColumn({
   favouriteIds: Set<number>;
   isFavourite: (id: number) => boolean;
   userId: string | null;
+  /** Map of umbrella occurrence id → number of children. Used to render a
+   *  stack icon + count badge on umbrella boxes. */
+  umbrellaCounts: Map<number, number>;
+  /** Called when the user clicks an umbrella's stack icon — opens the
+   *  ChildrenPopup at the app level. */
+  onShowChildren: (umbrella: EventWithPriority) => void;
 }) {
   const { yearMin, yearMax, totalHeight } = scale;
   const [events, setEvents] = useState<EventWithPriority[]>([]);
@@ -2342,6 +2410,8 @@ function TimelineColumn({
                 onLeave={onBoxLeave}
                 flashStamp={flash && flash.id === p.event.id ? flash.stamp : null}
                 isFavourite={isFavourite(p.event.id)}
+                childCount={umbrellaCounts.get(p.event.id) ?? 0}
+                onShowChildren={onShowChildren}
               />
             </div>
           );
@@ -2464,6 +2534,8 @@ function adaptiveDateLabel(
 function OccurrenceBox({
   top, heightPx, event, color, granularity, onEnter, onLeave, flashStamp,
   isFavourite,
+  childCount,
+  onShowChildren,
 }: {
   top: number;
   heightPx: number;
@@ -2475,6 +2547,10 @@ function OccurrenceBox({
   flashStamp: number | null;
   /** When true, renders a small heart badge in the corner of the box. */
   isFavourite: boolean;
+  /** Number of children rolling up to this entry. 0 = not an umbrella. */
+  childCount: number;
+  /** Click handler for the umbrella stack icon — opens the ChildrenPopup. */
+  onShowChildren: (umbrella: EventWithPriority) => void;
 }) {
   const bind = useHoverBinding(event, onEnter, onLeave);
 
@@ -2560,6 +2636,27 @@ function OccurrenceBox({
         >
           ♥
         </span>
+      )}
+      {childCount > 0 && (
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            // Stop the box's hover/tap binding from firing — we want the
+            // popup to open, not the EventPopup to flash in.
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowChildren(event);
+          }}
+          aria-label={`Show ${childCount} children of ${event.title}`}
+          title={`${childCount} children — click to list`}
+          className="absolute top-0.5 left-1 flex items-baseline gap-0.5 leading-none text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white"
+          style={{ fontSize: Math.max(9, Math.min(12, titleFontPx - 3)) }}
+        >
+          <span aria-hidden>⊞</span>
+          <span aria-hidden className="tabular-nums">{childCount}</span>
+        </button>
       )}
     </div>
   );
