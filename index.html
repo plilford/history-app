@@ -7,8 +7,19 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Ever-When</title>
+    <!-- Theme bootstrap: set the `dark` class on <html> before React mounts
+         so light-mode users don't flash dark briefly. Mirrors readInitialTheme
+         in src/lib/theme.tsx. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t !== "light") document.documentElement.classList.add("dark");
+        } catch (e) { document.documentElement.classList.add("dark"); }
+      })();
+    </script>
   </head>
-  <body class="bg-slate-900 text-slate-100">
+  <body class="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

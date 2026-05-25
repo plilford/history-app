@@ -8,6 +8,7 @@ import { AuthModal } from "./components/AuthModal";
 import { SuggestionsPopup } from "./components/SuggestionsPopup";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
+import { ThemeProvider, useTheme } from "./lib/theme";
 import { FAVOURITES_TIMELINE_NAME, FAVOURITES_TIMELINE_SLUG } from "./lib/favouritesTimeline";
 import {
   addUncertaintyMark,
@@ -190,17 +191,20 @@ function compactYearLabel(y: number): string {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <FavouritesProvider>
-        <AppInner />
-      </FavouritesProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <FavouritesProvider>
+          <AppInner />
+        </FavouritesProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
 function AppInner() {
   const { user, signOut } = useAuth();
   const { ids: favouriteIds, isFavourite } = useFavourites();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   /** When set, the SuggestionsPopup is open seeded on this occurrence. */
   const [suggestionSeed, setSuggestionSeed] = useState<EventWithPriority | null>(null);
@@ -1017,7 +1021,7 @@ function AppInner() {
         onChange={(e) => setOccurrenceDensity(Number(e.target.value))}
         className="w-24"
       />
-      <span className="tabular-nums w-6 text-slate-200">{occurrenceDensity}</span>
+      <span className="tabular-nums w-6 text-slate-800 dark:text-slate-200">{occurrenceDensity}</span>
     </label>
   );
 
@@ -1030,7 +1034,7 @@ function AppInner() {
       <select
         value={dateDisplayMode}
         onChange={(e) => setDateDisplayMode(e.target.value as DateDisplayMode)}
-        className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-200"
+        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 text-slate-800 dark:text-slate-200"
       >
         <option value="auto">Auto</option>
         <option value="always">Always</option>
@@ -1043,11 +1047,23 @@ function AppInner() {
     <button
       onClick={() => setShowLifespans((v) => !v)}
       title="Show or hide person full-lifespan bars (birth → death)"
-      className={`px-2 py-1 rounded border border-slate-700 ${
-        showLifespans ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
+      className={`px-2 py-1 rounded border border-slate-200 dark:border-slate-700 ${
+        showLifespans ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100" : "hover:bg-slate-100 dark:hover:bg-slate-800"
       }`}
     >
       Lifespans
+    </button>
+  );
+
+  const themeToggle = (
+    <button
+      onClick={toggleTheme}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1.5"
+    >
+      <span aria-hidden>{theme === "dark" ? "☀" : "☾"}</span>
+      <span>{theme === "dark" ? "Light" : "Dark"}</span>
     </button>
   );
 
@@ -1055,8 +1071,8 @@ function AppInner() {
     <button
       onClick={() => setShowRegionPanel((v) => !v)}
       title="Adjust regional emphasis for Worldwide & Arts/Thoughts timelines"
-      className={`px-2 py-1 rounded border border-slate-700 ${
-        showRegionPanel ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800"
+      className={`px-2 py-1 rounded border border-slate-200 dark:border-slate-700 ${
+        showRegionPanel ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100" : "hover:bg-slate-100 dark:hover:bg-slate-800"
       }`}
     >
       Regions
@@ -1069,7 +1085,7 @@ function AppInner() {
         Regional emphasis (Worldwide &amp; Arts/Thoughts only):
       </span>
       {REGIONS.map((r) => (
-        <label key={r.key} className="flex items-center gap-1 text-slate-300">
+        <label key={r.key} className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
           <span className="w-20">{r.label}</span>
           <input
             type="range"
@@ -1085,14 +1101,14 @@ function AppInner() {
             }
             className="w-24"
           />
-          <span className="tabular-nums w-5 text-slate-200">
+          <span className="tabular-nums w-5 text-slate-800 dark:text-slate-200">
             {regionFilter[r.key]}
           </span>
         </label>
       ))}
       <button
         onClick={() => setRegionFilter(DEFAULT_REGION_FILTER)}
-        className="px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800 text-slate-400"
+        className="px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
       >
         Reset
       </button>
@@ -1104,7 +1120,7 @@ function AppInner() {
       <button
         onClick={zoomOut}
         title="Zoom out"
-        className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+        className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
       >
         −
       </button>
@@ -1112,14 +1128,14 @@ function AppInner() {
       <button
         onClick={zoomReset}
         title="Reset zoom"
-        className="hidden md:inline-block px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 min-w-[90px]"
+        className="hidden md:inline-block px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[90px]"
       >
         {zoomLabel(pixelsPerYear)}
       </button>
       <button
         onClick={zoomIn}
         title="Zoom in"
-        className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+        className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
       >
         +
       </button>
@@ -1128,7 +1144,7 @@ function AppInner() {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="sticky top-0 z-40 flex-shrink-0 px-3 md:px-4 py-3 border-b border-slate-700 bg-slate-900 flex items-center gap-2 md:gap-3">
+      <header className="sticky top-0 z-40 flex-shrink-0 px-3 md:px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 md:gap-3">
         {/* Title is presentational only; hidden on mobile to free horizontal
             space. The launcher icon and PWA name already identify the app. */}
         <h1 className="hidden md:block text-lg font-semibold flex-shrink-0">
@@ -1151,6 +1167,7 @@ function AppInner() {
           {dateModeControl}
           {lifespansToggle}
           {regionsToggle}
+          {themeToggle}
         </div>
 
         {/* Account button — sign in / sign out. Shown on desktop alongside
@@ -1161,7 +1178,7 @@ function AppInner() {
               type="button"
               onClick={() => signOut()}
               title={`Signed in as ${user.email ?? "user"} — click to sign out`}
-              className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+              className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
             >
               Sign out
             </button>
@@ -1169,7 +1186,7 @@ function AppInner() {
             <button
               type="button"
               onClick={() => setAuthModalOpen(true)}
-              className="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+              className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
             >
               Sign in
             </button>
@@ -1184,8 +1201,8 @@ function AppInner() {
           onClick={() => setMobileMenuOpen((v) => !v)}
           aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
           aria-expanded={mobileMenuOpen}
-          className={`md:hidden flex items-center justify-center w-9 h-9 rounded border border-slate-700 ${
-            mobileMenuOpen ? "bg-slate-700 text-slate-100" : "hover:bg-slate-800 text-slate-300"
+          className={`md:hidden flex items-center justify-center w-9 h-9 rounded border border-slate-200 dark:border-slate-700 ${
+            mobileMenuOpen ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
           }`}
         >
           <span aria-hidden className="text-lg leading-none">
@@ -1199,26 +1216,27 @@ function AppInner() {
       {mobileMenuOpen && (
         <div
           ref={menuRef}
-          className="md:hidden sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-700 bg-slate-900 shadow-lg"
+          className="md:hidden sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
         >
           <div className="flex flex-col gap-3 text-xs">
             {densityControl}
             {dateModeControl}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {lifespansToggle}
               {regionsToggle}
+              {themeToggle}
               <button
                 onClick={zoomReset}
                 title="Reset zoom"
-                className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 ml-auto"
+                className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 ml-auto"
               >
                 Reset {zoomLabel(pixelsPerYear)}
               </button>
             </div>
             {showRegionPanel && (
-              <div className="pt-2 border-t border-slate-800">{regionPanel}</div>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800">{regionPanel}</div>
             )}
-            <div className="pt-2 border-t border-slate-800">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               {user ? (
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-slate-400 truncate">
@@ -1227,7 +1245,7 @@ function AppInner() {
                   <button
                     type="button"
                     onClick={() => { signOut(); setMobileMenuOpen(false); }}
-                    className="shrink-0 px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+                    className="shrink-0 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                   >
                     Sign out
                   </button>
@@ -1236,7 +1254,7 @@ function AppInner() {
                 <button
                   type="button"
                   onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
-                  className="w-full px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 text-slate-300"
+                  className="w-full px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                 >
                   Sign in / Sign up
                 </button>
@@ -1250,7 +1268,7 @@ function AppInner() {
           the header (the original behaviour). Phones see this inside the
           mobile menu panel instead, so don't double-render here. */}
       {showRegionPanel && !isMobile && (
-        <div className="px-4 py-2 border-b border-slate-700 bg-slate-900">
+        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
           {regionPanel}
         </div>
       )}
@@ -1402,11 +1420,11 @@ function YearAxis({
 
   return (
     <div
-      className="flex-shrink-0 bg-slate-900 border-r border-slate-700"
+      className="flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700"
       style={{ width }}
     >
       <div
-        className="sticky top-0 z-30 bg-slate-900 border-b border-slate-700 flex items-center px-2"
+        className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center px-2"
         style={{ height: HEADER_HEIGHT_PX }}
       >
         <span className="text-[10px] text-slate-500">
@@ -1431,7 +1449,7 @@ function YearAxis({
               <span className="text-[10px] text-slate-400 pr-1">
                 {compactYearLabel(y)}
               </span>
-              <div className="h-px bg-slate-700 flex-1" />
+              <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
             </div>
           );
         })}
@@ -1445,12 +1463,12 @@ function YearAxis({
               style={{ top }}
             >
               <span
-                className={`text-[10px] pr-1 ${t.isMajor ? "text-slate-300 font-medium" : "text-slate-500"}`}
+                className={`text-[10px] pr-1 ${t.isMajor ? "text-slate-700 dark:text-slate-300 font-medium" : "text-slate-500"}`}
               >
                 {t.label}
               </span>
               <div
-                className={`h-px flex-1 ${t.isMajor ? "bg-slate-600" : "bg-slate-800"}`}
+                className={`h-px flex-1 ${t.isMajor ? "bg-slate-600" : "bg-slate-50 dark:bg-slate-800"}`}
               />
             </div>
           );
@@ -1590,6 +1608,11 @@ type Placed = {
   endTop: number;          // px y for the end year   (line endpoint, newer = smaller)
   isPeriod: boolean;
   lineTrack: number;       // 0 = centre; only meaningful when isPeriod
+  /** When true, the period range line is suppressed at render time. Set
+   *  during the stagger pass when other occurrence boxes vertically overlap
+   *  this period's line — the line would just be visual noise crossing
+   *  through unrelated entries. */
+  hideLine: boolean;
   color: OccurrenceColor;
 };
 
@@ -2047,7 +2070,13 @@ function TimelineColumn({
       const keyRangeOnScreen =
         precisionTopMax + boxHeightPx > viewTop &&
         precisionTopMin < viewBottom;
-      if (keyRangeOnScreen) {
+      // Periods anchor at start_year / end_year only — never at the
+      // mid-period key year. For long-period entries (e.g. Cologne Cathedral
+      // 1248-1880) the mid-period anchor caused the box to "reappear" three
+      // times when scrolling through the period (at start, key, and end),
+      // which felt disorienting. The user wants long periods to anchor only
+      // at their actual start and end boundaries.
+      if (keyRangeOnScreen && !item.isPeriod) {
         const minTop = Math.min(keyTop - maxNudgePx, precisionTopMin);
         const maxTop = Math.max(keyTop + maxNudgePx, precisionTopMax);
         candidates.push({ ideal: keyTop, kind: "key", minTop, maxTop });
@@ -2108,7 +2137,8 @@ function TimelineColumn({
         endTop,
         isPeriod: item.isPeriod,
         lineTrack: 0,  // assigned in the stagger pass below
-        color: colorFor(item.event.id),
+        hideLine: false,  // resolved in the stagger pass below
+        color: colorFor(item.event),
       });
     }
 
@@ -2118,6 +2148,13 @@ function TimelineColumn({
     // segments don't vertically overlap with this one. Track 0 is the centre,
     // so the highest-priority period that's currently visible sits in the
     // middle and lower-priority lines fan outward.
+    //
+    // Also decide whether to render this period's range line AT ALL: if any
+    // OTHER occurrence box sits within the line's visible vertical extent,
+    // the line would just cross through unrelated entries and add visual
+    // noise. Hide it. (Useful on busy timelines like Master; harmless on
+    // sequential timelines like England Monarchs where reigns don't overlap
+    // each other, so lines stay visible there.)
     type Claim = { track: number; top: number; bottom: number };
     const claims: Claim[] = [];
     for (const p of placed) {
@@ -2131,6 +2168,22 @@ function TimelineColumn({
         // No visible line for this period in the current viewport — leave at 0.
         continue;
       }
+
+      // Hide the line if any OTHER placed box (i.e. not this period's own
+      // anchor box) vertically overlaps the line's visible extent. Exact
+      // match on (top, bottom) identifies the period's own box.
+      const ownTop = p.anchorTop;
+      const ownBottom = p.anchorTop + boxHeightPx;
+      const otherOverlap = slots.some((s) => {
+        const isOwn = s.top === ownTop && s.bottom === ownBottom;
+        if (isOwn) return false;
+        return !(s.bottom <= lineTop || s.top >= lineBottom);
+      });
+      if (otherOverlap) {
+        p.hideLine = true;
+        continue;  // No track needed; the line won't render.
+      }
+
       let track = 0;
       while (
         claims.some(
@@ -2187,11 +2240,11 @@ function TimelineColumn({
 
   return (
     <section
-      className="relative flex-shrink-0 border-r border-slate-700"
+      className="relative flex-shrink-0 border-r border-slate-200 dark:border-slate-700"
       style={{ width: columnWidth }}
     >
       <h2
-        className="sticky top-0 z-30 bg-slate-900 border-b border-slate-700 flex items-center"
+        className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center"
         style={{ height: HEADER_HEIGHT_PX }}
       >
         <button
@@ -2201,7 +2254,7 @@ function TimelineColumn({
             onHeaderClick(columnIndex, rect);
           }}
           title="Click to swap this column for another timeline"
-          className="w-full h-full px-3 text-left text-sm font-semibold text-slate-100 hover:bg-slate-800 focus:outline-none focus:bg-slate-800 flex items-center justify-between gap-2"
+          className="w-full h-full px-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:bg-slate-100 dark:focus:bg-slate-800 flex items-center justify-between gap-2"
         >
           <span className="truncate">{timeline.name}</span>
           <span aria-hidden className="text-[10px] text-slate-500 shrink-0">▾</span>
@@ -2214,7 +2267,7 @@ function TimelineColumn({
           // match the occurrence's box outline, positioned at the assigned
           // horizontal track so overlapping lines don't pile up.
           let lineEl: JSX.Element | null = null;
-          if (p.isPeriod) {
+          if (p.isPeriod && !p.hideLine) {
             const renderTop = Math.max(p.endTop, viewTop);
             const renderBottom = Math.min(p.startTop, viewBottom);
             const h = renderBottom - renderTop;
@@ -2451,6 +2504,22 @@ function OccurrenceBox({
   const titleFontPx = Math.max(11, Math.min(18, Math.round(heightPx * 0.2)));
   const descFontPx = Math.max(9, Math.min(15, titleFontPx - 2));
 
+  // Outline:
+  //   - style: solid (event default) | dashed (person) | dotted (art)
+  //   - width: border-2 (period) | border (point)
+  //   - colour: same hue as the box fill, fully opaque (see color.border)
+  const isPeriodEntry =
+    event.is_period &&
+    event.end_year != null &&
+    event.end_year !== event.start_year;
+  const outlineStyleClass =
+    event.occurrence_type === "person"
+      ? "border-dashed"
+      : event.occurrence_type === "art"
+        ? "border-dotted"
+        : "border-solid";
+  const outlineWidthClass = isPeriodEntry ? "border-2" : "border";
+
   return (
     <div
       ref={bind.ref}
@@ -2458,16 +2527,16 @@ function OccurrenceBox({
       onPointerEnter={bind.onPointerEnter}
       onPointerLeave={bind.onPointerLeave}
       onPointerDown={bind.onPointerDown}
-      className="absolute z-10 hover:z-20 left-1 right-1 rounded border px-2 py-1 overflow-hidden transition-colors"
+      className={`absolute z-10 hover:z-20 left-1 right-1 rounded ${outlineWidthClass} ${outlineStyleClass} px-2 py-1 overflow-hidden transition-colors`}
       style={{
         top,
         height: heightPx,
+        backgroundColor: color.fill,
         borderColor: color.border,
-        backgroundColor: color.background,
       }}
     >
       <div
-        className="leading-tight text-slate-100"
+        className="leading-tight text-slate-900 dark:text-slate-100"
         style={{ fontSize: titleFontPx }}
       >
         <span>{adaptiveDateLabel(event, granularity)}</span>

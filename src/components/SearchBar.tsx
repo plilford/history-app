@@ -308,11 +308,11 @@ export function SearchBar({
         // w-full lets the parent (flex-1 min-w-0 wrapper in App.tsx) shrink the
         // input to fit on phones. On desktop the w-72 override restores the
         // fixed 288px width the design assumes.
-        className="w-full md:w-72 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-500"
+        className="w-full md:w-72 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
       />
       {showDropdown && (
         <ul
-          className="absolute left-0 right-0 mt-1 z-40 max-h-96 overflow-y-auto rounded border border-slate-700 bg-slate-900 shadow-lg text-xs"
+          className="absolute left-0 right-0 mt-1 z-40 max-h-96 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg text-xs"
           role="listbox"
         >
           {loading && rows.length === 0 && (
@@ -322,8 +322,8 @@ export function SearchBar({
             const active = i === hi;
             const cls = `px-2 py-1 cursor-pointer ${
               active
-                ? "bg-slate-700 text-slate-100"
-                : "text-slate-300 hover:bg-slate-800"
+                ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`;
             if (row.kind === "year") {
               return (

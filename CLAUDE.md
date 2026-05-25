@@ -168,6 +168,26 @@ Before considering a batch "done", verify every new entry has:
 - [ ] `description` — concise, matches existing prose style
 - [ ] `wikipedia` — real URL, ideally matching the entry exactly
 
+**Duplicate check — BEFORE adding any new entry**
+- [ ] Grep `master.py` for the canonical noun(s) of the event before adding (e.g. `grep -i "battle of verdun" master.py`). Don't rely on `validate.py` — it only flags EXACT title collisions; near-duplicates with framing differences slip through.
+- [ ] If a near-duplicate exists, prefer **adding/merging slugs and bumping priority on the existing entry** over creating a parallel one.
+- [ ] Run `python -m v2.curation.dedupe_round_j` on your branch before importing to catch any near-dupes you missed (it's idempotent — re-running is safe).
+
+**What counts as a real duplicate (delete one):**
+- Two entries with similar normalized titles AND the same shape (both points OR both periods) AND overlapping dates. Examples: "Reconquista" + "Reconquista (Spain)" both period 722–1492 → real dupe. "Treaty of Versailles" + "Treaty of Versailles (German perspective)" both point at 1919 → real dupe. "Battle of Ankara" + "Battle of Ankara (1402)" both point at 1402 → real dupe.
+- Variant-suffix patterns that are usually real dupes (delete the variant, keep the canonical form): `X (Country perspective)`, `X (YEAR)`, `X (alt name)`, `X founded` vs `X established` (synonyms), `X completed` vs `X opens` (when both are at the same year), `X compiled`.
+
+**What is NOT a duplicate (keep both — they're a rollup pattern):**
+- A POINT entry like "X begins" or "X ends" alongside a PERIOD umbrella "X" (start_year → end_year) is intentional. The point markers show at high zoom (leaf level); the period umbrella shows at low zoom and absorbs them.
+- Required structure for this to work: the point child should set `first_zoom_out: "X"` pointing at the umbrella's exact title. The renderer's two-level zoom rollup then collapses children into the umbrella when zoomed out.
+- Examples that should coexist: "Haitian Revolution begins" (point 1791) + "Haitian Revolution" (period 1791–1804). "Tang dynasty begins" (point 618) + "Tang dynasty" (period 618–907). "Spanish flu pandemic begins" (point 1918) + "Spanish flu pandemic" (period 1918–1920).
+- Counter-example (still a dupe): two POINTS at the same year describing the same moment, e.g. "Battle of Verdun" point + "Battle of Verdun begins" point — no period umbrella exists, so they're functionally the same entry. Either delete one OR convert the canonical one to a proper period (with actual start/end dates from the historical record) so the begins/ends children make sense.
+
+**Don't create ongoing-umbrella occurrences**
+- [ ] Religions, ideologies, and other concepts that "exist to the current day" should be **timeline slugs** (`christianity`, `islam`, `judaism`, `major-religions`), NOT occurrences with `start_year=30 end_year=2025`. Such umbrellas render as huge bars spanning most of history and dominate the visual without adding information beyond what the slug already provides.
+- [ ] Same goes for things like "Western philosophy" or "Capitalism" or "The English language" — slug, not occurrence.
+- [ ] OK to have umbrella occurrences for **bounded** historical periods (Roman Empire, Renaissance, Industrial Revolution, Hundred Years' War) — they have a clear start AND end.
+
 **Date precision**
 - [ ] Post-1500 events: `start_month`/`start_day` whenever reliably known
 - [ ] Periods: `end_year` (and `end_month`/`end_day` if known); the importer auto-derives `is_period` from `end_year != start_year`, so you don't need to set the flag manually

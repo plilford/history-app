@@ -107,7 +107,7 @@ export const EventPopup = forwardRef<HTMLDivElement, {
       // overflow-y-auto on the outer container lets the user scroll within the
       // popup to reach the weblink/links at the bottom — the previous
       // overflow-hidden was clipping content past the maxHeight.
-      className="fixed z-50 border border-slate-600 bg-slate-800 text-slate-100 shadow-xl overflow-y-auto overflow-x-hidden overscroll-contain"
+      className="fixed z-50 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xl overflow-y-auto overflow-x-hidden overscroll-contain"
       style={{
         ...containerStyle,
         ...(isMobile ? {} : { borderRadius: 8 }),
@@ -119,7 +119,7 @@ export const EventPopup = forwardRef<HTMLDivElement, {
         <img
           src={summary.thumbnail.source}
           alt=""
-          className="w-full h-36 object-cover bg-slate-900"
+          className="w-full h-36 object-cover bg-white dark:bg-slate-900"
           loading="lazy"
         />
       )}
@@ -152,10 +152,10 @@ export const EventPopup = forwardRef<HTMLDivElement, {
                   ? "Remove from favourites"
                   : "Add to favourites"
             }
-            className={`shrink-0 -mt-1 w-7 h-7 flex items-center justify-center rounded hover:bg-slate-700 focus:outline-none focus:bg-slate-700 ${
+            className={`shrink-0 -mt-1 w-7 h-7 flex items-center justify-center rounded hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 ${
               fav
                 ? "text-rose-400 hover:text-rose-300"
-                : "text-slate-400 hover:text-slate-100"
+                : "text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             }`}
           >
             <span aria-hidden className="text-sm leading-none">
@@ -166,7 +166,7 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 -mt-1 -mr-1 w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
+            className="shrink-0 -mt-1 -mr-1 w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
           >
             <span aria-hidden className="text-base leading-none">×</span>
           </button>
@@ -185,9 +185,9 @@ export const EventPopup = forwardRef<HTMLDivElement, {
         )}
 
         {summary?.extract ? (
-          <p className="text-xs text-slate-200 leading-snug">{summary.extract}</p>
+          <p className="text-xs text-slate-800 dark:text-slate-200 leading-snug">{summary.extract}</p>
         ) : event.description ? (
-          <p className="text-xs text-slate-200 leading-snug">{event.description}</p>
+          <p className="text-xs text-slate-800 dark:text-slate-200 leading-snug">{event.description}</p>
         ) : loading ? (
           <p className="text-xs text-slate-500 italic">Loading…</p>
         ) : null}

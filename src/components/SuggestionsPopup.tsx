@@ -53,16 +53,16 @@ export function SuggestionsPopup({
       }}
     >
       <div
-        className="w-full max-w-md max-h-[80vh] flex flex-col rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"
+        className="w-full max-w-md max-h-[80vh] flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
         role="dialog"
         aria-label="You may also like"
       >
-        <div className="flex items-start justify-between gap-2 px-4 pt-3 pb-2 border-b border-slate-800">
+        <div className="flex items-start justify-between gap-2 px-4 pt-3 pb-2 border-b border-slate-200 dark:border-slate-800">
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-wide text-slate-500">
               Favourited
             </div>
-            <h2 className="text-sm font-semibold text-slate-100 truncate">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
               {seed.title}
             </h2>
             <div className="text-xs text-slate-400 mt-0.5">
@@ -73,7 +73,7 @@ export function SuggestionsPopup({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <span aria-hidden className="text-lg leading-none">×</span>
           </button>
@@ -96,7 +96,7 @@ export function SuggestionsPopup({
               return (
                 <li
                   key={occurrence.id}
-                  className="border-b border-slate-800 last:border-b-0 px-3 py-2 flex items-start gap-2 hover:bg-slate-800/50"
+                  className="border-b border-slate-200 dark:border-slate-800 last:border-b-0 px-3 py-2 flex items-start gap-2 hover:bg-slate-100 dark:hover:bg-slate-800/50"
                 >
                   <button
                     type="button"
@@ -106,7 +106,7 @@ export function SuggestionsPopup({
                     className={`shrink-0 w-7 h-7 flex items-center justify-center rounded text-base ${
                       fav
                         ? "text-rose-400 hover:text-rose-300"
-                        : "text-slate-500 hover:text-slate-200"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
                     }`}
                   >
                     <span aria-hidden>{fav ? "♥" : "♡"}</span>
@@ -121,7 +121,7 @@ export function SuggestionsPopup({
                     }}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <div className="text-sm font-medium text-slate-100 truncate">
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                       {occurrence.title}
                     </div>
                     <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
@@ -135,11 +135,11 @@ export function SuggestionsPopup({
             })}
         </ul>
 
-        <div className="border-t border-slate-800 px-3 py-2 flex items-center justify-end">
+        <div className="border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded text-xs text-slate-200 hover:bg-slate-800"
+            className="px-3 py-1.5 rounded text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             Done
           </button>

@@ -68,7 +68,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     >
       <div
         ref={containerRef}
-        className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"
+        className="w-full max-w-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
         role="dialog"
         aria-label={mode === "signin" ? "Sign in" : "Sign up"}
       >
@@ -79,8 +79,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               onClick={() => { setMode("signin"); setError(null); setInfo(null); }}
               className={`pb-1 border-b-2 ${
                 mode === "signin"
-                  ? "border-slate-100 text-slate-100"
-                  : "border-transparent text-slate-400 hover:text-slate-200"
+                  ? "border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100"
+                  : "border-transparent text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
               Sign in
@@ -90,8 +90,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               onClick={() => { setMode("signup"); setError(null); setInfo(null); }}
               className={`pb-1 border-b-2 ${
                 mode === "signup"
-                  ? "border-slate-100 text-slate-100"
-                  : "border-transparent text-slate-400 hover:text-slate-200"
+                  ? "border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100"
+                  : "border-transparent text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
               Sign up
@@ -101,7 +101,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800"
+            className="w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <span aria-hidden className="text-lg leading-none">×</span>
           </button>
@@ -116,7 +116,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full px-2 py-1.5 rounded border border-slate-700 bg-slate-800 text-slate-100 text-sm focus:outline-none focus:border-slate-500"
+              className="mt-1 w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
           </label>
           <label className="block text-xs text-slate-400">
@@ -126,7 +126,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full px-2 py-1.5 rounded border border-slate-700 bg-slate-800 text-slate-100 text-sm focus:outline-none focus:border-slate-500"
+              className="mt-1 w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
           </label>
 

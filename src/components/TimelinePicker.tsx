@@ -295,12 +295,12 @@ export function TimelinePicker({
   return (
     <div
       ref={containerRef}
-      className="fixed z-50 rounded border border-slate-700 bg-slate-900 shadow-xl flex flex-col"
+      className="fixed z-50 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl flex flex-col"
       style={{ left, top, width: POPOVER_WIDTH, maxHeight: POPOVER_HEIGHT }}
       role="dialog"
       aria-label="Pick a timeline"
     >
-      <div className="p-2 border-b border-slate-700">
+      <div className="p-2 border-b border-slate-200 dark:border-slate-700">
         {/* Wrapper holds the real input and a ghost div for the autofill hint */}
         <div className="relative">
           {/* Ghost text rendered behind the input shows the autofill suggestion */}
@@ -321,7 +321,7 @@ export function TimelinePicker({
             }}
             onKeyDown={onKeyDown}
             placeholder="Search timelines…"
-            className="relative w-full px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-500"
+            className="relative w-full px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             autoComplete="off"
             spellCheck={false}
           />
@@ -381,8 +381,8 @@ export function TimelinePicker({
                 }}
                 className={`px-2 py-1 cursor-pointer flex items-baseline gap-2 ${
                   active
-                    ? "bg-slate-700 text-slate-100"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
                 title={t.slug}
               >
@@ -403,7 +403,7 @@ export function TimelinePicker({
         )}
       </ul>
 
-      <div className="px-2 py-1 border-t border-slate-700 text-[10px] text-slate-500 flex items-center justify-between">
+      <div className="px-2 py-1 border-t border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 flex items-center justify-between">
         <span>{allTimelines.length} timelines</span>
         <span>↑↓ Enter · Tab autofill · Esc</span>
       </div>
