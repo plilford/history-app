@@ -811,16 +811,28 @@ function AppInner() {
     // span based on the occurrence's own span (matching the rollup
     // thresholds in TimelineColumn): leaves at <80yr, mid-period umbrellas
     // in the 80-800yr band, era-spanning umbrellas at ≥800yr.
+    //
+    // Then enforce an AGE-BASED FLOOR so deep-time entries (Permian-Triassic,
+    // First dinosaurs, etc.) don't try to render at a 40-year window
+    // 252 million years ago — which would push pixelsPerYear into the
+    // hundreds of thousands and blow past the browser's scroll-height limits.
+    // Rough rule: target window grows ~5% of the event's age, so a 1000-year
+    // old event still gets a 50-year window, a 1M-year event gets 50k years,
+    // a 252M event gets ~12.6M years (broad Mesozoic context).
     const main = mainRef.current;
     if (target != null && main) {
       const start = ev.start_year ?? target;
       const end = ev.end_year ?? start;
       const span = Math.max(0, end - start);
       const naturalLevel = span > 800 ? 2 : span > 10 ? 1 : 0;
-      const targetVisibleSpan =
+      const typeBasedSpan =
         naturalLevel === 2 ? Math.max(800, span * 1.5) :
         naturalLevel === 1 ? Math.max(80, span * 4) :
         40;
+      const currentYear = new Date().getFullYear();
+      const ageYears = Math.max(0, currentYear - target);
+      const ageBasedFloor = Math.max(40, ageYears * 0.05);
+      const targetVisibleSpan = Math.max(typeBasedSpan, ageBasedFloor);
       const viewportH = Math.max(1, main.clientHeight - HEADER_HEIGHT_PX);
       // Convert desired local-ppy at the target year back to the linear-band
       // ppy `k` (the value held in pixelsPerYear). See yearScale.ts:

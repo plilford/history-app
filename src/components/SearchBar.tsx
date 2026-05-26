@@ -8,13 +8,27 @@ import { normalizeOngoing } from "../lib/dateFormat";
 //   "occurrence"  — jumps to an event's key date and (if needed) swaps in the
 //                   timeline where that event has the highest priority score.
 //   "timeline"    — swaps the rightmost visible column to this timeline.
+//   "surprise"    — picks a random occurrence from the top 10% by priority
+//                   and treats it as a search-bar selection. Only present
+//                   when the input has fewer than SURPRISE_HIDE_AT chars so
+//                   it doesn't clutter active queries.
 type ResultRow =
   | { kind: "year"; year: number; label: string }
   | { kind: "occurrence"; event: HistoryEvent }
-  | { kind: "timeline"; timeline: Timeline };
+  | { kind: "timeline"; timeline: Timeline }
+  | { kind: "surprise" };
 
 const SEARCH_DEBOUNCE_MS = 180;
 const MAX_RESULTS = 10;
+// "Surprise me!" stays visible through the first two keystrokes (lengths 0,
+// 1, 2) and disappears at three or more chars — by then the user is clearly
+// searching for something specific and the random shortcut would just take
+// a row away from actual results.
+const SURPRISE_HIDE_AT = 3;
+// Fraction of the entire occurrence corpus we consider for Surprise me!.
+// 0.10 = top 10% by main_priority. Larger = more variety, smaller = more
+// "famous" picks. With ~5500 entries this is a ~550-entry pool.
+const SURPRISE_TOP_FRACTION = 0.10;
 
 // Parse a free-form year/date string. Returns the year as an integer
 // (negative for BCE) or null if the input doesn't look like a date.
@@ -120,9 +134,16 @@ export function SearchBar({
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   const [loading, setLoading] = useState(false);
+  /** Disabled briefly while we fetch+resolve a random surprise pick. */
+  const [surprising, setSurprising] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** Cache of "top SURPRISE_TOP_FRACTION% by main_priority" occurrence ids.
+   *  Fetched lazily on the first Surprise click and re-used for subsequent
+   *  clicks. Stable for a session — the underlying priorities only change
+   *  when data is re-imported. */
+  const surpriseIdsRef = useRef<number[] | null>(null);
 
   // ----- Load all timelines once -----------------------------------------
   // The set is small (~20) and stable enough to fetch eagerly so timeline
@@ -223,11 +244,15 @@ export function SearchBar({
       .slice(0, 6);  // cap so timelines don't crowd out occurrences
   }, [allTimelines, query]);
 
-  // Combine year-row (if any) + timeline rows + occurrence rows. Timelines
-  // sit above occurrences because they're a navigation jump (cheaper) and
-  // the user typed a name match.
+  // Combine surprise-row (if eligible) + year-row + timeline rows +
+  // occurrence rows. Surprise sits at the top so the user's eye lands on
+  // it when they click the empty input. It vanishes once they've typed
+  // SURPRISE_HIDE_AT chars so it doesn't displace genuine results.
   const rows: ResultRow[] = useMemo(() => {
     const out: ResultRow[] = [];
+    if (query.trim().length < SURPRISE_HIDE_AT) {
+      out.push({ kind: "surprise" });
+    }
     const year = parseYearInput(query);
     if (year != null) {
       out.push({ kind: "year", year, label: `Go to ${displayYear(year)}` });
@@ -257,7 +282,80 @@ export function SearchBar({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
+  /** Lazy-load + cache the id pool for Surprise me!. Counts the corpus,
+   *  fetches the top SURPRISE_TOP_FRACTION (capped to 2000 ids to keep the
+   *  payload small), and remembers the result on the ref. */
+  async function loadSurpriseIds(): Promise<number[]> {
+    if (surpriseIdsRef.current) return surpriseIdsRef.current;
+    // Count first so we know how many to grab. Exclude resources from the
+    // pool — randomly landing on a podcast episode is more confusing than
+    // helpful when the user clicked "surprise me" expecting a historical
+    // event.
+    const countRes = await supabase
+      .from("occurrences")
+      .select("id", { count: "exact", head: true })
+      .neq("occurrence_type", "resource");
+    const total = countRes.count ?? 0;
+    if (total === 0) {
+      surpriseIdsRef.current = [];
+      return [];
+    }
+    const limit = Math.min(2000, Math.max(50, Math.floor(total * SURPRISE_TOP_FRACTION)));
+    const { data, error } = await supabase
+      .from("occurrences")
+      .select("id")
+      .neq("occurrence_type", "resource")
+      .order("main_priority", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error("surprise pool fetch failed", error);
+      surpriseIdsRef.current = [];
+      return [];
+    }
+    const ids = (data ?? []).map((r) => (r as { id: number }).id);
+    surpriseIdsRef.current = ids;
+    return ids;
+  }
+
+  async function pickSurprise() {
+    if (surprising) return;
+    setSurprising(true);
+    try {
+      const ids = await loadSurpriseIds();
+      if (ids.length === 0) return;
+      // Pick a random id, then fetch its full row. Substitute via
+      // topEventForPerson when lifespans are hidden so the user always lands
+      // on something visible.
+      const pickId = ids[Math.floor(Math.random() * ids.length)];
+      const { data, error } = await supabase
+        .from("occurrences")
+        .select("*")
+        .eq("id", pickId)
+        .single();
+      if (error || !data) {
+        // eslint-disable-next-line no-console
+        console.error("surprise pick fetch failed", error);
+        return;
+      }
+      let chosen = normalizeOngoing(data as HistoryEvent);
+      if (!showLifespans && chosen.is_full_life) {
+        chosen = (await topEventForPerson(chosen)) ?? chosen;
+      }
+      onPickOccurrence(chosen);
+      setOpen(false);
+      setQuery("");
+      inputRef.current?.blur();
+    } finally {
+      setSurprising(false);
+    }
+  }
+
   function pick(row: ResultRow) {
+    if (row.kind === "surprise") {
+      void pickSurprise();
+      return;
+    }
     if (row.kind === "year") onPickYear(row.year);
     else if (row.kind === "occurrence") onPickOccurrence(row.event);
     else if (row.kind === "timeline") onPickTimeline(row.timeline);
@@ -325,6 +423,32 @@ export function SearchBar({
                 ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                 : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`;
+            if (row.kind === "surprise") {
+              return (
+                <li
+                  key="surprise"
+                  className={cls}
+                  role="option"
+                  aria-selected={active}
+                  onMouseEnter={() => setHi(i)}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault();
+                    pick(row);
+                  }}
+                  aria-disabled={surprising}
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="truncate flex-1">
+                      <span className="mr-1">🎲</span>
+                      {surprising ? "Picking…" : "Surprise me!"}
+                    </span>
+                    <span className="text-[10px] text-slate-500 shrink-0">
+                      random top-priority entry
+                    </span>
+                  </div>
+                </li>
+              );
+            }
             if (row.kind === "year") {
               return (
                 <li
