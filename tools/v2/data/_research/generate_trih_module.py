@@ -1,0 +1,173 @@
+"""
+Merge auto-curator output (trih_curated_draft.json) with manual per-item
+overrides (manual_curations.py) and emit the final data module at
+tools/v2/data/the_rest_is_history.py.
+
+For each grouped item (keyed by first ep_num):
+    - If OVERRIDES[ep_num] is None → SKIP
+    - If OVERRIDES[ep_num] is a dict → use those fields, fall back to
+      auto-curator output for anything not specified
+    - If not in OVERRIDES → use auto-curator output unchanged (only
+      included if it has a usable date)
+
+Tags are validated against master.py — unresolved tags get a warning and
+are dropped from the output.
+
+ID range: 1_008_000 + index. Reserved for TRIH module.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+TOOLS = HERE.parents[2]
+sys.path.insert(0, str(TOOLS))
+sys.path.insert(0, str(HERE))   # so `manual_curations` is importable
+
+from manual_curations import OVERRIDES  # type: ignore
+from v2.data.master import OCCURRENCES as MASTER_OCCURRENCES
+
+DRAFT = HERE / "trih_curated_draft.json"
+OUT_MODULE = HERE.parent / "the_rest_is_history.py"
+
+START_ID = 1_008_000
+
+
+def repr_value(v):
+    if isinstance(v, str):
+        return repr(v)
+    if isinstance(v, list):
+        return "[" + ", ".join(repr_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{repr_value(k)}: {repr_value(val)}" for k, val in v.items()) + "}"
+    return repr(v)
+
+
+def render_entry(d: dict, eid: int) -> str:
+    title = d["resource_title"]
+    start_year = d["subject_start"]
+    end_year = d["subject_end"]
+    desc = d["description"]
+    if len(desc) > 500:
+        desc = desc[:497].rstrip() + "..."
+    ep_payload = d["resource_episodes"]
+    is_series = len(ep_payload) > 1
+
+    lines = ["    {"]
+    lines.append(f'     "id": {eid:_},')
+    lines.append(f'     "type": "resource",')
+    lines.append(f'     "title": {repr_value(title)},')
+    lines.append(f'     "start_year": {start_year},')
+    if end_year is not None:
+        lines.append(f'     "end_year": {end_year},')
+    if desc:
+        lines.append(f'     "description": {repr_value(desc)},')
+    if is_series:
+        lines.append(f'     "resource_link": {repr_value(ep_payload[0]["url"])},')
+        lines.append(f'     "resource_episodes": {repr_value(ep_payload)},')
+    else:
+        lines.append(f'     "resource_link": {repr_value(ep_payload[0]["url"])},')
+    lines.append(f'     "priorities": {{"the-rest-is-history-podcast": 900000}},')
+    tags = d["candidate_tags"]
+    if tags:
+        lines.append(f'     "tags": {repr_value(tags)},')
+    lines.append("    },")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    drafts = json.loads(DRAFT.read_text(encoding="utf-8"))
+    print(f"Loaded {len(drafts)} drafts")
+    print(f"Loaded {len(OVERRIDES)} manual overrides")
+
+    # Validate tag titles against master.py.
+    master_title_set = {(o.get("title") or "").strip().lower() for o in MASTER_OCCURRENCES}
+    def resolve_tags(tags: list[str], context: str) -> list[str]:
+        out = []
+        for t in tags:
+            if t.strip().lower() in master_title_set:
+                out.append(t)
+            else:
+                print(f"  WARN [{context}]: unresolved tag {t!r}")
+        return out
+
+    # Key drafts by first ep_num.
+    by_first_ep: dict[int, dict] = {}
+    for d in drafts:
+        by_first_ep[d["ep_nums"][0]] = d
+
+    # Sanity: overrides referring to ep_nums that aren't first-ep of any group.
+    valid_first_eps = set(by_first_ep.keys())
+    for ep in list(OVERRIDES.keys()):
+        if ep not in valid_first_eps:
+            print(f"  WARN: OVERRIDES[{ep}] doesn't match any grouped item's first ep_num")
+
+    # Build final items.
+    skipped: list[tuple[int, str]] = []
+    importable: list[dict] = []
+    for ep, draft in by_first_ep.items():
+        override = OVERRIDES.get(ep, "_USE_AUTO")
+        if override is None:
+            skipped.append((ep, draft["resource_title"]))
+            continue
+        item = dict(draft)  # copy
+        if isinstance(override, dict):
+            if "start" in override:
+                item["subject_start"] = override["start"]
+            if "end" in override:
+                item["subject_end"] = override["end"]
+            if "title" in override:
+                item["resource_title"] = override["title"]
+            if "tags" in override:
+                item["candidate_tags"] = override["tags"]
+        # Validate tags now (skips bad ones with a warning).
+        item["candidate_tags"] = resolve_tags(item["candidate_tags"], f"ep {ep}")
+        # Skip if still no date.
+        if item["subject_start"] is None:
+            skipped.append((ep, item["resource_title"]))
+            continue
+        importable.append(item)
+
+    importable.sort(key=lambda d: (d["subject_start"], d["ep_nums"][0]))
+
+    header = '''"""
+The Rest Is History podcast — first 300 episodes.
+
+Auto-generated by tools/v2/data/_research/generate_trih_module.py from
+the auto-curator output + manual_curations.py overrides. Re-run that
+script after editing manual_curations.py.
+
+Each entry is a resource-type occurrence:
+  - title: "<subject> (TRIH ep N)" or "<series> (TRIH eps N-M)"
+  - resource_link: audio enclosure URL (megaphone CDN)
+  - resource_episodes (optional): [{title, url, date}, ...] for series
+  - priorities: only on the-rest-is-history-podcast (resource timeline)
+  - tags: list of subject titles from master.py the episode covers
+
+ID range reserved for TRIH: 1_008_000 - 1_008_999.
+"""
+
+from __future__ import annotations
+
+OCCURRENCES: list[dict] = [
+'''
+
+    blocks = [render_entry(d, START_ID + i) for i, d in enumerate(importable)]
+    body = "\n".join(blocks)
+    footer = "\n]\n"
+
+    OUT_MODULE.write_text(header + body + footer, encoding="utf-8")
+    print(f"\nWrote {OUT_MODULE} with {len(importable)} entries (ids {START_ID}-{START_ID + len(importable) - 1})")
+    print(f"Skipped {len(skipped)} items (deliberately thematic / undatable):")
+    for ep, title in skipped[:60]:
+        print(f"  ep {ep:>3}: {title}")
+    if len(skipped) > 60:
+        print(f"  ... and {len(skipped) - 60} more")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

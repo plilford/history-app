@@ -295,9 +295,11 @@ def main():
                 "priority":      int(prio),
             })
 
-    # 3. Upsert occurrences.
+    # 3. Upsert occurrences. Chunk small enough to survive flaky connections —
+    #    the resource_episodes JSONB column inflates per-row size and large
+    #    batches occasionally trip the HTTP/2 stream limit.
     print(f"Upserting {len(occurrence_payload)} occurrences ...")
-    for batch in chunked(occurrence_payload, 500):
+    for batch in chunked(occurrence_payload, 200):
         sb.table("occurrences").upsert(batch, on_conflict="id").execute()
 
     # 4. Replace occurrence_timeline_priorities. The recompute_main_for_occurrence
