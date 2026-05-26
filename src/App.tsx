@@ -8,6 +8,7 @@ import { AuthModal } from "./components/AuthModal";
 import { SuggestionsPopup } from "./components/SuggestionsPopup";
 import { ChildrenPopup } from "./components/ChildrenPopup";
 import { ResourcesPopup } from "./components/ResourcesPopup";
+import { DataFreshnessChip } from "./components/DataFreshnessChip";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
 import { ThemeProvider, useTheme } from "./lib/theme";
@@ -1393,6 +1394,12 @@ function AppInner() {
           {lifespansToggle}
           {regionsToggle}
           {themeToggle}
+        </div>
+
+        {/* Editor-only DB freshness reminder. Returns null for everyone
+            else so non-editor users don't see it. */}
+        <div className="hidden md:flex">
+          <DataFreshnessChip />
         </div>
 
         {/* Account button — sign in / sign out. Shown on desktop alongside
