@@ -1,4 +1,5 @@
-# Large research artifacts — regenerable from the scripts in this dir.
-trih_rss.xml
-trih_episodes_raw.json
-trih_curated_draft.json
+# Large research artifacts — regenerable from the .py scripts in this dir.
+# Keep only Python sources and this file; ignore everything else.
+*
+!*.py
+!.gitignore

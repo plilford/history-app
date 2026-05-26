@@ -1,6 +1,6 @@
 """
-Parse The Rest Is History RSS feed (Megaphone) into a JSON list of the
-first 300 numbered episodes in chronological order. Output is written to
+Parse The Rest Is History RSS feed (Megaphone) into a JSON list of every
+numbered episode in chronological order. Output is written to
 `trih_episodes_raw.json` for the curation script to consume.
 
 For each episode we capture:
@@ -116,14 +116,12 @@ def main() -> int:
             "description":  description[:600],   # cap to a reasonable size
         })
 
-    # Keep only the first 300 numbered episodes in chronological order.
-    out_300 = out[:300]
+    # Keep every numbered episode in chronological order.
     print(f"Numbered episodes parsed: {len(out)}")
-    print(f"Returning first 300 in chronological order")
-    print(f"  oldest: ep {out_300[0]['ep_num']} ({out_300[0]['pub_date']}) {out_300[0]['title_clean']!r}")
-    print(f"  newest: ep {out_300[-1]['ep_num']} ({out_300[-1]['pub_date']}) {out_300[-1]['title_clean']!r}")
+    print(f"  oldest: ep {out[0]['ep_num']} ({out[0]['pub_date']}) {out[0]['title_clean']!r}")
+    print(f"  newest: ep {out[-1]['ep_num']} ({out[-1]['pub_date']}) {out[-1]['title_clean']!r}")
 
-    OUT_PATH.write_text(json.dumps(out_300, ensure_ascii=False, indent=2), encoding="utf-8")
+    OUT_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote {OUT_PATH}")
     return 0
 
