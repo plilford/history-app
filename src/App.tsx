@@ -210,8 +210,32 @@ function AppInner() {
   /** When set, the SuggestionsPopup is open seeded on this occurrence. */
   const [suggestionSeed, setSuggestionSeed] = useState<EventWithPriority | null>(null);
   /** When set, the ChildrenPopup is open showing rollup children of this
-   *  umbrella entry. */
-  const [umbrellaForChildren, setUmbrellaForChildren] = useState<HistoryEvent | null>(null);
+   *  umbrella entry. `highlightChildId` (optional) makes one row in the
+   *  list stand out — used when the popup is opened from a child via its
+   *  ↰ indicator. */
+  const [umbrellaForChildren, setUmbrellaForChildren] = useState<
+    { umbrella: HistoryEvent; highlightChildId?: number } | null
+  >(null);
+
+  /** Open the ChildrenPopup for the parent umbrella of a given child entry.
+   *  Fetches the parent (it might not be in any currently-loaded column's
+   *  events), then opens the popup with the source child highlighted. */
+  const handleShowParent = useCallback(async (childEvent: HistoryEvent) => {
+    if (childEvent.first_zoom_out_id == null) return;
+    const { data, error } = await supabase
+      .from("occurrences")
+      .select("*")
+      .eq("id", childEvent.first_zoom_out_id)
+      .single();
+    if (error || !data) {
+      console.error("parent fetch failed", error);
+      return;
+    }
+    setUmbrellaForChildren({
+      umbrella: data as HistoryEvent,
+      highlightChildId: childEvent.id,
+    });
+  }, []);
 
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   // Names of the columns to render, in display order. Search may replace the
@@ -1369,7 +1393,8 @@ function AppInner() {
               isFavourite={isFavourite}
               userId={user?.id ?? null}
               umbrellaCounts={umbrellaCounts}
-              onShowChildren={setUmbrellaForChildren}
+              onShowChildren={(umbrella) => setUmbrellaForChildren({ umbrella })}
+              onShowParent={handleShowParent}
             />
           ))}
         </div>
@@ -1398,7 +1423,7 @@ function AppInner() {
           onShowChildren={(ev) => {
             clearTimers();
             setHovered(null);
-            setUmbrellaForChildren(ev);
+            setUmbrellaForChildren({ umbrella: ev });
           }}
         />
       )}
@@ -1431,7 +1456,8 @@ function AppInner() {
 
       {umbrellaForChildren && (
         <ChildrenPopup
-          umbrella={umbrellaForChildren}
+          umbrella={umbrellaForChildren.umbrella}
+          highlightedChildId={umbrellaForChildren.highlightChildId}
           onClose={() => setUmbrellaForChildren(null)}
           onPickOccurrence={(occ) => handlePickOccurrence(occ as HistoryEvent)}
         />
@@ -1700,6 +1726,7 @@ function TimelineColumn({
   userId,
   umbrellaCounts,
   onShowChildren,
+  onShowParent,
 }: {
   timeline: Timeline;
   columnIndex: number;
@@ -1740,6 +1767,9 @@ function TimelineColumn({
   /** Called when the user clicks an umbrella's stack icon — opens the
    *  ChildrenPopup at the app level. */
   onShowChildren: (umbrella: EventWithPriority) => void;
+  /** Called when the user clicks a child's ↰ indicator — opens the
+   *  ChildrenPopup on the parent umbrella with the source child highlighted. */
+  onShowParent: (childEvent: EventWithPriority) => void;
 }) {
   const { yearMin, yearMax, totalHeight } = scale;
   const [events, setEvents] = useState<EventWithPriority[]>([]);
@@ -2418,6 +2448,7 @@ function TimelineColumn({
                 isFavourite={isFavourite(p.event.id)}
                 childCount={umbrellaCounts.get(p.event.id) ?? 0}
                 onShowChildren={onShowChildren}
+                onShowParent={onShowParent}
               />
             </div>
           );
@@ -2542,6 +2573,7 @@ function OccurrenceBox({
   isFavourite,
   childCount,
   onShowChildren,
+  onShowParent,
 }: {
   top: number;
   heightPx: number;
@@ -2551,12 +2583,16 @@ function OccurrenceBox({
   onEnter: HoverHandler;
   onLeave: () => void;
   flashStamp: number | null;
-  /** When true, renders a small heart badge in the corner of the box. */
+  /** Always-rendered favourite indicator: ♥ when true, ♡ outline when false. */
   isFavourite: boolean;
-  /** Number of children rolling up to this entry. 0 = not an umbrella. */
+  /** Number of children rolling up to this entry. 0 = not an umbrella; the
+   *  ⊞-N badge is suppressed. */
   childCount: number;
   /** Click handler for the umbrella stack icon — opens the ChildrenPopup. */
   onShowChildren: (umbrella: EventWithPriority) => void;
+  /** Click handler for the ↰ child indicator — fetches the parent umbrella
+   *  and opens the ChildrenPopup with this entry highlighted. */
+  onShowParent: (childEvent: EventWithPriority) => void;
 }) {
   const bind = useHoverBinding(event, onEnter, onLeave);
 
@@ -2633,42 +2669,65 @@ function OccurrenceBox({
           </span>
         )}
       </div>
-      {(isFavourite || childCount > 0) && (
-        <div
-          className="absolute bottom-0.5 right-1 flex items-baseline gap-1.5 leading-none font-bold"
-          style={{ fontSize: Math.max(12, Math.min(18, titleFontPx)) }}
+      {/* Bottom-left: ↰ child indicator. Only rendered when this entry rolls
+          up to a parent umbrella. Click opens the ChildrenPopup on the
+          parent, with this entry highlighted in the list. */}
+      {event.first_zoom_out_id != null && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onShowParent(event);
+          }}
+          aria-label={`Part of ${event.first_zoom_out ?? "umbrella"} — show siblings`}
+          title={
+            event.first_zoom_out
+              ? `Part of ${event.first_zoom_out} — click for siblings`
+              : "Click for siblings"
+          }
+          className="absolute bottom-0.5 left-1 leading-none text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300"
+          style={{ fontSize: Math.max(10, Math.min(13, titleFontPx - 3)) }}
         >
-          {childCount > 0 && (
-            <button
-              type="button"
-              onPointerDown={(e) => {
-                // Stop the box's hover/tap binding from firing — we want
-                // the children popup to open, not the EventPopup.
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onShowChildren(event);
-              }}
-              aria-label={`Show ${childCount} children of ${event.title}`}
-              title={`${childCount} children — click to list`}
-              className="flex items-baseline gap-0.5 leading-none text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300"
-            >
-              <span aria-hidden>⊞</span>
-              <span aria-hidden className="tabular-nums">{childCount}</span>
-            </button>
-          )}
-          {isFavourite && (
-            <span
-              aria-hidden
-              title="Favourite"
-              className="text-rose-500 dark:text-rose-400 pointer-events-none"
-            >
-              ♥
-            </span>
-          )}
-        </div>
+          <span aria-hidden>↰</span>
+        </button>
       )}
+
+      {/* Bottom-right: umbrella ⊞-N badge (clickable, when this entry IS an
+          umbrella) + always-shown favourite heart. The favourite renders
+          ♡ outline when not set, ♥ filled when set — so users always know
+          they can favourite the entry by opening the popup. */}
+      <div className="absolute bottom-0.5 right-1 flex items-baseline gap-1.5 leading-none">
+        {childCount > 0 && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowChildren(event);
+            }}
+            aria-label={`Show ${childCount} children of ${event.title}`}
+            title={`${childCount} children — click to list`}
+            className="flex items-baseline gap-0.5 leading-none text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300"
+            style={{ fontSize: Math.max(10, Math.min(13, titleFontPx - 3)) }}
+          >
+            <span aria-hidden>⊞</span>
+            <span aria-hidden className="tabular-nums">{childCount}</span>
+          </button>
+        )}
+        <span
+          aria-hidden
+          title={isFavourite ? "Favourited" : "Not favourited"}
+          className={`pointer-events-none font-bold leading-none ${
+            isFavourite
+              ? "text-rose-500 dark:text-rose-400"
+              : "text-slate-500 dark:text-slate-500"
+          }`}
+          style={{ fontSize: Math.max(14, Math.min(20, titleFontPx + 1)) }}
+        >
+          {isFavourite ? "♥" : "♡"}
+        </span>
+      </div>
     </div>
   );
 }

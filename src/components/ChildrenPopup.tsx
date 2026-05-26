@@ -16,10 +16,15 @@ import { normalizeOngoing } from "../lib/dateFormat";
  */
 export function ChildrenPopup({
   umbrella,
+  highlightedChildId,
   onClose,
   onPickOccurrence,
 }: {
   umbrella: Occurrence;
+  /** Optional: render this child row with a stronger highlight so the user
+   *  can spot which sibling they came from. Set when the popup was opened
+   *  via the ↰ indicator on a child box. */
+  highlightedChildId?: number;
   onClose: () => void;
   /** Clicking a child navigates the timeline to it (same handler the search
    *  bar uses). */
@@ -158,10 +163,15 @@ export function ChildrenPopup({
                   : tier === "mid"
                     ? "text-blue-600 dark:text-blue-400"
                     : "text-slate-600 dark:text-slate-400";
+              const highlighted = child.id === highlightedChildId;
               return (
                 <li
                   key={child.id}
-                  className="border-b border-slate-200 dark:border-slate-800 last:border-b-0"
+                  className={`border-b border-slate-200 dark:border-slate-800 last:border-b-0 ${
+                    highlighted
+                      ? "bg-amber-100 dark:bg-amber-900/40"
+                      : ""
+                  }`}
                 >
                   <button
                     type="button"
@@ -177,6 +187,11 @@ export function ChildrenPopup({
                     <span className={`min-w-0 flex-1 text-xs truncate ${titleClass}`}>
                       {child.title}
                     </span>
+                    {highlighted && (
+                      <span className="shrink-0 text-[10px] text-amber-700 dark:text-amber-300">
+                        ← you
+                      </span>
+                    )}
                   </button>
                 </li>
               );
