@@ -41,6 +41,12 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   resourceCount?: number;
   /** Click handler for the 📚 resources badge — opens the ResourcesPopup. */
   onShowResources?: (subject: EventWithPriority) => void;
+  /** For RESOURCE-type events: list of subjects this resource tags, with
+   *  ids + titles. Rendered as clickable chips at the bottom of the popup. */
+  taggedSubjects?: Array<{ id: number; title: string }>;
+  /** Click handler for a tag chip — navigates the timeline to that
+   *  subject (search-bar style). */
+  onPickSubject?: (subjectId: number) => void;
 }>(function EventPopup({
   event,
   anchorRect,
@@ -53,6 +59,8 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   onShowChildren,
   resourceCount = 0,
   onShowResources,
+  taggedSubjects = [],
+  onPickSubject,
 }, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -248,6 +256,17 @@ export const EventPopup = forwardRef<HTMLDivElement, {
           </a>
         )}
 
+        {event.resource_link && (
+          <a
+            href={event.resource_link}
+            target="_blank"
+            rel="noreferrer"
+            className="block text-[10px] text-blue-400 hover:text-blue-300 underline truncate"
+          >
+            {event.resource_link.replace(/^https?:\/\//, "")}
+          </a>
+        )}
+
         {event.other_link && (
           <a
             href={event.other_link}
@@ -257,6 +276,34 @@ export const EventPopup = forwardRef<HTMLDivElement, {
           >
             {event.other_link.replace(/^https?:\/\//, "")}
           </a>
+        )}
+
+        {/* Tagged subjects (only meaningful for resource-type entries —
+            taggedSubjects is empty otherwise). Clickable chips that
+            navigate the timeline to the subject. */}
+        {taggedSubjects.length > 0 && (
+          <div className="pt-1 border-t border-slate-200 dark:border-slate-800">
+            <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">
+              Tags
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {taggedSubjects.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    if (onPickSubject) {
+                      onPickSubject(s.id);
+                      onClose();
+                    }
+                  }}
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-blue-900 hover:text-blue-800 dark:hover:text-blue-200 hover:border-blue-400 dark:hover:border-blue-600"
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

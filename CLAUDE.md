@@ -129,13 +129,39 @@ Resource-type occurrences are content **about** history rather than history itse
 - `tags: ["Subject Title One", "Subject Title Two", ...]` — list of regular occurrences this resource covers. Resolved by case-insensitive title match. Bidirectional — the regular subject's popup will offer this resource back. **When adding a new regular occurrence, also check whether any existing resource covers it and add a tag.**
 - Resources never tag other resources directly — they connect only via shared subjects.
 
+**Resource subtypes (`resource_subtype` column, migration 013):**
+
+Discriminator that drives the frontend palette and may drive other display decisions later. Free-text, kebab-case. Set as a `subtype:` field in the data dict; the importer copies to the `resource_subtype` column.
+
+- `"podcast-episode"` — TRIH episodes (default for that module). Renders teal.
+- `"book-nonfiction"` — non-fiction history books. Renders teal.
+- `"book-fiction"` — historical novels. Renders **purple**.
+- `"documentary"` — future, renders teal.
+- `"museum-artifact"` — future, renders teal.
+
+The `book-fiction` value is the only one currently triggering the purple branch in `colorFor`.
+
 **Authoring a new resource:**
 
 1. Pick the right data module (or create one for a new resource type).
-2. Use IDs in the resource module's reserved range (e.g. TRIH starts at 1_008_000, books at 1_010_000 — see the data module header).
-3. Set `type: "resource"`, `resource_link`, `priorities: {"<resource-slug>": <pri>}`.
-4. List subject `tags` — match titles exactly. Run `validate.py` to catch typos.
+2. Use IDs in the resource module's reserved range:
+   - TRIH: `1_008_000 – 1_008_999`
+   - Popular history books: `1_009_000 – 1_009_999`
+   - (reserve `1_010_000+` for future resource modules)
+3. Set `type: "resource"`, `subtype: "<kebab-case>"`, `resource_link`, `priorities: {"<resource-slug>": <pri>}`.
+4. List subject `tags` — match `master.py` titles exactly. Run `validate.py` to catch typos.
 5. If the resource covers a subject that's missing from `master.py`, add the subject FIRST (with all its proper slugs, region weights, etc.), then tag.
+
+**Authoring a new SUBJECT (regular occurrence): run the tag suggester**
+
+After appending entries with id ≥ N to `master.py`, run:
+
+```
+cd tools
+python -m v2.curation.suggest_resource_tags --since N
+```
+
+It scans every resource's title + description for word-bounded mentions of the new subjects' titles. For each match it prints a checklist — manually open the relevant resource module, add the new subject's title to its `tags: [...]` list, then re-import. Conservative — avoids false-positive matches on common short words.
 
 ### Date precision
 
@@ -308,6 +334,9 @@ What's actually wired up:
 - **vite-env.d.ts** at `src/vite-env.d.ts` is a single `/// <reference types="vite/client" />` line. Without it, `import.meta.env` doesn't typecheck.
 - **Frontend changes don't reach ever-when.com until pushed.** Editing `src/*` only updates local dev (`npm run dev`). The live site is whatever last built from `main` on Cloudflare Pages. If a fix "isn't working", check `git status` first.
 - **Search-pick zoom behaviour** (in `handlePickOccurrence`): clicking a search result auto-zooms to the entry's natural rollup level and force-shows it (exempts from rollup substitution + pins to front of placement queue). This is the only place where the renderer treats one entry preferentially; the override is scoped to the 2.2s flash window.
+- **Hosted Supabase statement timeout (~8s) can interrupt the importer.** Symptom: `import_v2` upserts everything successfully, then hits `canceling statement due to statement timeout` on the final `rebuild_zoom_out_ids()` RPC — which means the subsequent `resource_tags` write step never runs. Recovery: run the standalone `python -m v2.curation.import_resource_tags_only` to do just the tag step. Resources still appear on their timeline (priorities were written before the timeout) but their popup-and-render tag relationships need that follow-up step.
+- **PostgREST schema cache lag.** Just-added columns (e.g. `resource_subtype` after migration 013) can return "column not found" errors for a minute or two until PostgREST refreshes its cache. Wait and retry, or hit the project's API → "Reload schema" in the dashboard.
+- **Resource colour palette is driven by `resource_subtype`, not the timeline.** `book-fiction` → purple; everything else (`podcast-episode`, `book-nonfiction`, null) → teal. Add new subtypes by extending the discriminator in `src/lib/occurrenceColor.ts`.
 
 ## How to read more
 

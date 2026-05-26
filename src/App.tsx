@@ -443,6 +443,11 @@ function AppInner() {
   const [subjectDates, setSubjectDates] = useState<Map<number, { start: number; end: number | null }>>(
     () => new Map(),
   );
+  /** id → title for every non-resource occurrence. Used by the EventPopup
+   *  to render clickable subject names for a resource's tags. */
+  const [subjectTitles, setSubjectTitles] = useState<Map<number, string>>(
+    () => new Map(),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -471,7 +476,7 @@ function AppInner() {
         const [umbRows, dateRows, tagRows] = await Promise.all([
           pages("first_zoom_out_id, second_zoom_out_id",
                 "first_zoom_out_id.not.is.null,second_zoom_out_id.not.is.null"),
-          pages("id, start_year, end_year, occurrence_type"),
+          pages("id, start_year, end_year, occurrence_type, title"),
           (async () => {
             const out: Array<{ resource_id: number; subject_id: number }> = [];
             let off = 0;
@@ -502,15 +507,20 @@ function AppInner() {
         }
         setUmbrellaCounts(umbMap);
 
-        // Subject dates — NON-resource occurrences only. The resource column
-        // uses these to determine which of its tagged subjects are visible.
+        // Subject dates + titles — NON-resource occurrences only. The
+        // resource column uses dates to determine which tagged subjects
+        // overlap the viewport. The popup uses titles to render clickable
+        // tag rows for resources.
         const datesMap = new Map<number, { start: number; end: number | null }>();
+        const titleMap = new Map<number, string>();
         for (const r of dateRows) {
           if (r.occurrence_type === "resource") continue;
           if (r.start_year == null) continue;
           datesMap.set(r.id, { start: r.start_year, end: r.end_year ?? null });
+          if (r.title) titleMap.set(r.id, r.title);
         }
         setSubjectDates(datesMap);
+        setSubjectTitles(titleMap);
 
         // Tag indexes — forward + reverse.
         const tags = new Map<number, Set<number>>();
@@ -1519,6 +1529,26 @@ function AppInner() {
             clearTimers();
             setHovered(null);
             setSubjectForResources(ev);
+          }}
+          taggedSubjects={
+            hovered.event.occurrence_type === "resource"
+              ? Array.from(tagsByResource.get(hovered.event.id) ?? [])
+                  .map((sid) => ({ id: sid, title: subjectTitles.get(sid) ?? `#${sid}` }))
+                  .sort((a, b) => a.title.localeCompare(b.title))
+              : []
+          }
+          onPickSubject={async (sid) => {
+            // Fetch the subject + reuse the search-pick handler.
+            const { data } = await supabase
+              .from("occurrences")
+              .select("*")
+              .eq("id", sid)
+              .single();
+            if (data) {
+              clearTimers();
+              setHovered(null);
+              handlePickOccurrence(data as HistoryEvent);
+            }
           }}
         />
       )}
