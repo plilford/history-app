@@ -258,6 +258,11 @@ def main():
             # List-of-dicts for multi-episode podcast series bundled into one
             # occurrence: [{"title": ..., "url": ..., "date": ...}, ...].
             "resource_episodes": o.get("resource_episodes"),
+            # Optional discriminator for resource flavours — drives the
+            # frontend colour scheme. Common values:
+            #   'podcast-episode', 'book-nonfiction', 'book-fiction',
+            #   'documentary', 'museum-artifact'
+            "resource_subtype":  o.get("subtype"),
             "weight_europe":      _w("europe"),
             "weight_americas":    _w("americas"),
             "weight_asia":        _w("asia"),

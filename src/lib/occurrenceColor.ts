@@ -99,15 +99,16 @@ export function colorFor(occ: Pick<Occurrence,
   | "weight_australasia"
   | "weight_africa"
   | "occurrence_type"
-> & { resource_palette?: "teal" | "purple" }): OccurrenceColor {
+  | "resource_subtype"
+>): OccurrenceColor {
   // Resource-type occurrences override the region scheme entirely — they
   // live in their own dedicated timelines and use a uniform palette:
-  // teal for non-fiction (podcasts, history books, documentaries) and
-  // purple for fiction (historical novels). The caller passes the palette
-  // hint based on the timeline slug; default = teal.
+  //   teal   — non-fiction (podcast episodes, history books, documentaries)
+  //   purple — fiction (historical novels and similar)
+  // Subtype 'book-fiction' triggers purple; anything else (including null)
+  // gets teal.
   if (occ.occurrence_type === "resource") {
-    const palette = occ.resource_palette ?? "teal";
-    if (palette === "purple") {
+    if (occ.resource_subtype === "book-fiction") {
       return {
         region: "global",
         hue: 280,

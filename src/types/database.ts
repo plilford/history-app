@@ -52,6 +52,12 @@ export interface Occurrence {
    *  bundled into one occurrence): list of `{title, url, date?}`.
    *  Null when a single resource_link is enough. */
   resource_episodes: Array<{ title: string; url: string; date?: string }> | null;
+  /** Sub-type discriminator for resource-type rows. Convention:
+   *  'podcast-episode', 'book-nonfiction', 'book-fiction', 'documentary',
+   *  'museum-artifact'. Drives the frontend colour scheme. Null for
+   *  non-resource rows (or resources whose subtype is implicit from the
+   *  timeline). */
+  resource_subtype: string | null;
 
   /** Computed by DB trigger. Do not write directly. */
   main_category: string | null;
