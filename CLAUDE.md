@@ -110,9 +110,32 @@ Five columns: `europe`, `americas`, `asia`, `australasia`, `africa`. They modula
 - `type: "event"` (default) — events, periods, wars, dynasties, treaties.
 - `type: "person"` — a person's full lifespan only. Birth-year → death-year. **Always pair with `is_full_life: True`.**
 - `type: "art"` — discrete works (paintings, films, novels, symphonies). Point events; use the year of completion/publication.
+- `type: "resource"` — meta-content **about** history: podcast episodes, history books, documentaries, museum artifacts. **See the dedicated "Resources" section below — different rules apply.**
 - Person-events (publications, accessions, decisions made by a person) are `type: "event"`, NOT `type: "person"`.
 - Bands and ensembles (The Beatles, Rolling Stones) are modelled as `type: "person"` WITHOUT `is_full_life=True` — they should keep rendering when the Lifespans toggle is off.
 - **Invariant:** every `is_full_life=True` person needs at least one related `type: "event"` or `type: "art"` entry inside their lifespan, name-matching their title or description. The search bar's lifespan fallback relies on this.
+
+### Resources
+
+Resource-type occurrences are content **about** history rather than history itself — podcast episodes, popular books, documentaries, museum artifacts. They live in dedicated **resource timelines** (currently `the-rest-is-history-podcast` and `popular-history-books`) and **never appear on any non-resource timeline** — not master, not country slugs, not nothing. The DB trigger `otp_check_resource` and the frontend's `is_resource_timeline` filter both enforce this.
+
+**Rules:**
+
+- `type: "resource"`.
+- Lives in its own data module under `tools/v2/data/` (one module per resource timeline — `the_rest_is_history.py`, `popular_history_books.py`). NEVER mixed into `master.py`.
+- `resource_link` field for the primary external URL (replaces `wikipedia` semantically — `wikipedia` still allowed when the resource also has a wiki page, e.g. a book).
+- `resource_episodes` (optional list of `{title, url, date?}`) when a single occurrence bundles multiple episodes of a podcast series.
+- `priorities` MUST only reference resource-timeline slugs (the ones with `is_resource_timeline: True` in `import_v2.py`). The validator + DB trigger reject cross-pollination.
+- `tags: ["Subject Title One", "Subject Title Two", ...]` — list of regular occurrences this resource covers. Resolved by case-insensitive title match. Bidirectional — the regular subject's popup will offer this resource back. **When adding a new regular occurrence, also check whether any existing resource covers it and add a tag.**
+- Resources never tag other resources directly — they connect only via shared subjects.
+
+**Authoring a new resource:**
+
+1. Pick the right data module (or create one for a new resource type).
+2. Use IDs in the resource module's reserved range (e.g. TRIH starts at 1_008_000, books at 1_010_000 — see the data module header).
+3. Set `type: "resource"`, `resource_link`, `priorities: {"<resource-slug>": <pri>}`.
+4. List subject `tags` — match titles exactly. Run `validate.py` to catch typos.
+5. If the resource covers a subject that's missing from `master.py`, add the subject FIRST (with all its proper slugs, region weights, etc.), then tag.
 
 ### Date precision
 
@@ -222,6 +245,10 @@ Before considering a batch "done", verify every new entry has:
 **Umbrella references** (rollup zoom)
 - [ ] If entry belongs to a broader umbrella period that exists as its own row, set `first_zoom_out` (and optionally `second_zoom_out`) to the umbrella's exact title
 - [ ] `validate.py` flags dangling refs; importer's `rebuild_zoom_out_ids()` populates FK columns
+
+**Resource tagging** (when adding NEW non-resource occurrences)
+- [ ] Grep each resource data module (`tools/v2/data/the_rest_is_history.py`, `tools/v2/data/popular_history_books.py`, …) for the entry's title and main subject nouns. If a resource covers this subject, add the entry's exact title to that resource's `tags: [...]` list and re-import.
+- [ ] Symmetric direction (when adding NEW resources): list every relevant subject in `tags`. Validator flags titles that don't resolve.
 
 **Before importing**
 - [ ] `cd tools && python -m v2.validate` — must exit 0

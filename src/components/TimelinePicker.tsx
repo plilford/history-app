@@ -132,6 +132,7 @@ export function TimelinePicker({
       slug: FAVOURITES_TIMELINE_SLUG,
       display_order: -1,
       is_featured: false,
+      is_resource_timeline: false,
     }),
     [],
   );

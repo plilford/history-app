@@ -31,14 +31,22 @@ from __future__ import annotations
 import sys
 from collections import defaultdict
 
+import importlib
+
 from v2.data import master
-from v2.import_v2 import TIMELINES
+from v2.import_v2 import TIMELINES, _EXTRA_DATA_MODULES
 
 
 def collect_all_occurrences() -> list[dict]:
     """Mirror import_v2.collect_all_occurrences so the two stay in sync."""
     out: list[dict] = []
-    for module_name, mod in [("master", master)]:
+    sources: list[tuple[str, object]] = [("master", master)]
+    for name in _EXTRA_DATA_MODULES:
+        try:
+            sources.append((name, importlib.import_module(name)))
+        except ImportError:
+            pass
+    for module_name, mod in sources:
         if not hasattr(mod, "OCCURRENCES"):
             print(f"  WARNING: data module {module_name} has no OCCURRENCES list")
             continue
@@ -56,6 +64,8 @@ def main() -> int:
     warnings: list[str] = []
 
     valid_slugs = {t["slug"] for t in TIMELINES}
+    resource_slugs = {t["slug"] for t in TIMELINES if t.get("is_resource_timeline")}
+    non_resource_slugs = valid_slugs - resource_slugs
 
     by_id: dict[int, dict] = {}
     by_title: dict[str, list[dict]] = defaultdict(list)
@@ -111,6 +121,43 @@ def main() -> int:
                 f"type={o.get('type')!r} (expected 'person')"
             )
 
+        # Resource invariant: resource-type entries live ONLY on
+        # resource timelines, and non-resource entries live ONLY on
+        # non-resource timelines. The DB trigger catches this too, but
+        # validate.py surfaces it before the network round-trip.
+        prio_keys = set((o.get("priorities") or {}).keys())
+        if o.get("type") == "resource":
+            stray = prio_keys & non_resource_slugs
+            if stray:
+                errors.append(
+                    f"id {eid} ({title!r}): resource-type entry has "
+                    f"non-resource priorities: {sorted(stray)}"
+                )
+            if not (prio_keys & resource_slugs):
+                errors.append(
+                    f"id {eid} ({title!r}): resource-type entry has no "
+                    f"priorities on any resource timeline"
+                )
+            # resource_link is the canonical external URL for resources.
+            if not o.get("resource_link") and not o.get("resource_episodes"):
+                warnings.append(
+                    f"id {eid} ({title!r}): resource-type entry has no "
+                    f"resource_link or resource_episodes"
+                )
+        else:
+            stray = prio_keys & resource_slugs
+            if stray:
+                errors.append(
+                    f"id {eid} ({title!r}): non-resource entry "
+                    f"(type={o.get('type', 'event')!r}) has resource "
+                    f"timeline priorities: {sorted(stray)}"
+                )
+            if o.get("tags"):
+                errors.append(
+                    f"id {eid} ({title!r}): non-resource entry has `tags` "
+                    f"field (tags only valid on resource-type entries)"
+                )
+
     # ---- duplicate-title check --------------------------------------------
     # Run after the pass so we report each duplicate group once.
     for key, group in by_title.items():
@@ -130,6 +177,25 @@ def main() -> int:
                 warnings.append(
                     f"id {o.get('id')} ({o.get('title')!r}): "
                     f"{field}={ref!r} doesn't match any entry's title"
+                )
+
+    # ---- resource tag references -----------------------------------------
+    # Each entry in a resource's `tags: [title, ...]` list must resolve to
+    # an existing entry (case-insensitive trim). Unresolvable tags become
+    # dangling references — the importer would log + skip them.
+    for o in occurrences:
+        tags = o.get("tags") or []
+        for tag in tags:
+            if not isinstance(tag, str):
+                errors.append(
+                    f"id {o.get('id')} ({o.get('title')!r}): tag {tag!r} "
+                    f"is not a string"
+                )
+                continue
+            if title_key(tag) not in titles_set:
+                warnings.append(
+                    f"id {o.get('id')} ({o.get('title')!r}): tag {tag!r} "
+                    f"doesn't match any entry's title"
                 )
 
     # ---- report -----------------------------------------------------------

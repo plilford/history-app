@@ -7,6 +7,11 @@ export interface Timeline {
   slug: string;
   display_order: number;
   is_featured: boolean;
+  /** Marks a timeline as a "resource" timeline (podcasts, books,
+   *  documentaries…) — only occurrence rows with occurrence_type='resource'
+   *  may carry priorities on these. The frontend filters resources from
+   *  every non-resource timeline. */
+  is_resource_timeline: boolean;
 }
 
 export interface Occurrence {
@@ -38,12 +43,21 @@ export interface Occurrence {
 
   wikipedia_link: string | null;
   other_link: string | null;
+  /** Primary external URL for resource-type entries (podcast episode page,
+   *  book seller / Wikipedia page, museum page). Null for regular events,
+   *  people, and art. The popup uses this in place of wikipedia_link when
+   *  occurrence_type='resource'. */
+  resource_link: string | null;
+  /** For multi-episode resources (e.g. a podcast series of 4 episodes
+   *  bundled into one occurrence): list of `{title, url, date?}`.
+   *  Null when a single resource_link is enough. */
+  resource_episodes: Array<{ title: string; url: string; date?: string }> | null;
 
   /** Computed by DB trigger. Do not write directly. */
   main_category: string | null;
   main_priority: number | null;
 
-  occurrence_type: "event" | "person" | "art";
+  occurrence_type: "event" | "person" | "art" | "resource";
   date_uncertain: boolean;
 
   /** Per-region weights (1-10), used by the region filter sliders to modulate
@@ -92,6 +106,14 @@ export interface OccurrenceWithPriority extends Occurrence {
 export interface UserFavourite {
   user_id: string;
   occurrence_id: number;
+  created_at: string;
+}
+
+/** Junction row linking a resource occurrence to a subject occurrence it
+ *  covers. Bidirectional — the relationship can be queried either way. */
+export interface ResourceTag {
+  resource_id: number;
+  subject_id: number;
   created_at: string;
 }
 

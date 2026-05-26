@@ -586,6 +586,10 @@ function AppInner() {
       slug: FAVOURITES_TIMELINE_SLUG,
       display_order: -1,
       is_featured: false,
+      // Favourites can contain ANY occurrence type the user has favourited,
+      // including resources — treat the pseudo-timeline as resource-aware
+      // so the non-resource filter doesn't strip them out.
+      is_resource_timeline: true,
     }),
     [],
   );
@@ -1821,13 +1825,20 @@ function TimelineColumn({
         return;
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("occurrence_timeline_priorities")
         .select("priority, occurrences!inner(*)")
         .eq("timeline_id", timeline.id)
         .lte("occurrences.start_year", yearMax)
         .order("priority", { ascending: false })
         .limit(1000);
+      // Defence-in-depth: even though the DB trigger prevents resource-type
+      // rows from getting priority rows on non-resource timelines, filter
+      // them out at the client too. Cheap and avoids any surprise mixing.
+      if (!timeline.is_resource_timeline) {
+        query = query.neq("occurrences.occurrence_type", "resource");
+      }
+      const { data, error } = await query;
 
       if (error) { console.error(error); return; }
 

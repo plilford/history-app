@@ -34,40 +34,70 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from v2.data import master   # add new modules here as we build them
-# from v2.data import ww2, napoleonic, industrial, renaissance, etc.
+# Resource-type data modules — separate files for cleanliness. Imported
+# lazily so a missing module (e.g. early in scaffolding) doesn't crash the
+# importer. See `_optional_module` below.
+# from v2.data import the_rest_is_history, popular_history_books
 
 # The timelines we maintain. Edit this list to add more.
 # (slug is the lookup key used in each occurrence's "priorities" dict;
 #  name is the human-readable label shown in the UI.)
+#
+# `is_resource_timeline=True` flags a timeline as resource-only: only
+# occurrence_type='resource' rows may carry priorities on it, and the
+# frontend filters out resources from every other timeline. The DB
+# enforces this via the otp_check_resource trigger (migration 011).
 TIMELINES = [
-    {"slug": "master",            "name": "Master",                "display_order": 0,  "is_featured": True},
-    {"slug": "arts-and-thoughts", "name": "Arts and Thoughts",     "display_order": 1,  "is_featured": True},
-    {"slug": "england-monarchs",  "name": "England: Monarchs",     "display_order": 2,  "is_featured": True},
-    {"slug": "us-presidents",     "name": "USA: Presidents",       "display_order": 3,  "is_featured": False},
-    {"slug": "china",             "name": "China",                 "display_order": 4,  "is_featured": False},
-    {"slug": "usa",               "name": "USA",                   "display_order": 5,  "is_featured": False},
-    {"slug": "france",            "name": "France",                "display_order": 6,  "is_featured": False},
-    {"slug": "india",             "name": "India",                 "display_order": 7,  "is_featured": False},
-    {"slug": "people",            "name": "People",                "display_order": 8,  "is_featured": False},
-    {"slug": "ww1",               "name": "World War I",           "display_order": 9,  "is_featured": False},
-    {"slug": "ww2",               "name": "World War II",          "display_order": 10, "is_featured": False},
-    {"slug": "cold-war",          "name": "Cold War",              "display_order": 11, "is_featured": False},
-    {"slug": "napoleonic",        "name": "Napoleonic Wars",       "display_order": 12, "is_featured": False},
-    {"slug": "industrial",        "name": "Industrial Revolution", "display_order": 13, "is_featured": False},
-    {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False},
-    {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False},
-    {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False},
-    {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False},
-    {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False},
-    {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False},
-    {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False},
-    {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False},
-    {"slug": "ottoman",           "name": "Ottoman Empire",        "display_order": 22, "is_featured": False},
-    {"slug": "major-religions",   "name": "Major Religions",       "display_order": 23, "is_featured": False},
-    {"slug": "christianity",      "name": "Christianity",          "display_order": 24, "is_featured": False},
-    {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False},
-    {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False},
+    {"slug": "master",            "name": "Master",                "display_order": 0,  "is_featured": True,  "is_resource_timeline": False},
+    {"slug": "arts-and-thoughts", "name": "Arts and Thoughts",     "display_order": 1,  "is_featured": True,  "is_resource_timeline": False},
+    {"slug": "england-monarchs",  "name": "England: Monarchs",     "display_order": 2,  "is_featured": True,  "is_resource_timeline": False},
+    {"slug": "us-presidents",     "name": "USA: Presidents",       "display_order": 3,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "china",             "name": "China",                 "display_order": 4,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "usa",               "name": "USA",                   "display_order": 5,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "france",            "name": "France",                "display_order": 6,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "india",             "name": "India",                 "display_order": 7,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "people",            "name": "People",                "display_order": 8,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "ww1",               "name": "World War I",           "display_order": 9,  "is_featured": False, "is_resource_timeline": False},
+    {"slug": "ww2",               "name": "World War II",          "display_order": 10, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "cold-war",          "name": "Cold War",              "display_order": 11, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "napoleonic",        "name": "Napoleonic Wars",       "display_order": 12, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "industrial",        "name": "Industrial Revolution", "display_order": 13, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "ottoman",           "name": "Ottoman Empire",        "display_order": 22, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "major-religions",   "name": "Major Religions",       "display_order": 23, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "christianity",      "name": "Christianity",          "display_order": 24, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False, "is_resource_timeline": False},
+    # ----- Resource timelines (occurrence_type='resource' only) --------------
+    {"slug": "the-rest-is-history-podcast", "name": "The Rest Is History (podcast)", "display_order": 100, "is_featured": False, "is_resource_timeline": True},
+    {"slug": "popular-history-books",       "name": "Popular history books",         "display_order": 101, "is_featured": False, "is_resource_timeline": True},
 ]
+
+
+# Module names that contribute extra OCCURRENCES lists (in addition to
+# v2.data.master). Imported lazily so missing modules don't break the
+# importer during phased rollouts.
+_EXTRA_DATA_MODULES = [
+    "v2.data.the_rest_is_history",
+    "v2.data.popular_history_books",
+]
+
+
+def _optional_module(name: str):
+    """Import the named module if it exists; return None on ImportError so
+    the importer can keep going during phased rollouts."""
+    try:
+        import importlib
+        return importlib.import_module(name)
+    except ImportError:
+        return None
 
 
 # -------------------------- helpers ------------------------------------------
@@ -110,8 +140,14 @@ def build_display_date(o: dict) -> str | None:
 
 # -------------------------- main ---------------------------------------------
 def collect_all_occurrences() -> list[dict]:
+    """Pull OCCURRENCES from master.py and any resource modules that exist."""
     out: list[dict] = []
-    for module_name, mod in [("master", master)]:
+    sources: list[tuple[str, object]] = [("master", master)]
+    for name in _EXTRA_DATA_MODULES:
+        mod = _optional_module(name)
+        if mod is not None:
+            sources.append((name, mod))
+    for module_name, mod in sources:
         if not hasattr(mod, "OCCURRENCES"):
             print(f"  WARNING: data module {module_name} has no OCCURRENCES list")
             continue
@@ -147,6 +183,12 @@ def main():
     seen_ids: set[int] = set()
     occurrence_payload: list[dict] = []
     priorities_payload: list[dict] = []
+    # Pending resource-tag rows. Subjects are referenced by TITLE in the
+    # data files (human-readable + stable); we resolve them to IDs against
+    # the union of all parsed entries after the first pass.
+    pending_tags: list[tuple[int, str]] = []  # (resource_id, subject_title)
+    title_to_id: dict[str, int] = {}          # for tag resolution
+
     for o in occurrences:
         eid = o["id"]
         if eid < 1_000_000:
@@ -210,6 +252,12 @@ def main():
             "display_date":     build_display_date(o),
             "wikipedia_link":   o.get("wikipedia"),
             "other_link":       o.get("other_link"),
+            # Primary external URL for resource-type entries. Falls back to
+            # `resource_link` field in data files; null otherwise.
+            "resource_link":    o.get("resource_link"),
+            # List-of-dicts for multi-episode podcast series bundled into one
+            # occurrence: [{"title": ..., "url": ..., "date": ...}, ...].
+            "resource_episodes": o.get("resource_episodes"),
             "weight_europe":      _w("europe"),
             "weight_americas":    _w("americas"),
             "weight_asia":        _w("asia"),
@@ -227,6 +275,14 @@ def main():
             # timeline isn't crowded with person bars; the user can opt in.
             "is_full_life":       bool(o.get("is_full_life", False)),
         })
+
+        # Title → id mapping for resource_tag resolution below.
+        title_to_id[o["title"].strip().lower()] = eid
+
+        # Resource tags: each resource entry can declare a `tags: [title, ...]`
+        # list of subject occurrences it covers. Resolved after the loop.
+        for subject_title in (o.get("tags") or []):
+            pending_tags.append((eid, subject_title))
 
         for tl_slug, prio in (o.get("priorities") or {}).items():
             tl_id = slug_to_id.get(tl_slug)
@@ -261,8 +317,52 @@ def main():
     print("Rebuilding zoom_out FK ids ...")
     sb.rpc("rebuild_zoom_out_ids").execute()
 
+    # 6. Resource tags: resolve subject titles → ids, replace the rows for any
+    #    resource that re-imported. Tags pointing at an unknown title get a
+    #    warning and are skipped (typical cause: typo or the subject hasn't
+    #    been added yet).
+    tag_rows: list[dict] = []
+    unresolved: list[tuple[int, str]] = []
+    for resource_id, subject_title in pending_tags:
+        sid = title_to_id.get(subject_title.strip().lower())
+        if sid is None:
+            unresolved.append((resource_id, subject_title))
+            continue
+        if sid == resource_id:
+            print(f"  WARNING: resource {resource_id} tags itself ({subject_title!r}); skipping")
+            continue
+        tag_rows.append({"resource_id": resource_id, "subject_id": sid})
+
+    if unresolved:
+        print(f"  {len(unresolved)} unresolved resource tags (subject title not found):")
+        for rid, t in unresolved[:20]:
+            print(f"    resource {rid} → {t!r}")
+        if len(unresolved) > 20:
+            print(f"    ...and {len(unresolved) - 20} more")
+
+    if pending_tags:
+        # Replace existing tag rows for any resource we just upserted, so
+        # removing a tag in the data file actually removes it on hosted.
+        resource_ids_with_tags = sorted({rid for rid, _ in pending_tags})
+        print(f"Replacing resource_tags for {len(resource_ids_with_tags)} resources "
+              f"({len(tag_rows)} tag rows) ...")
+        for batch in chunked(resource_ids_with_tags, 200):
+            sb.table("resource_tags").delete().in_("resource_id", batch).execute()
+        # Dedupe (data files can list the same subject twice by accident).
+        seen_pairs: set[tuple[int, int]] = set()
+        unique_tag_rows: list[dict] = []
+        for r in tag_rows:
+            key = (r["resource_id"], r["subject_id"])
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            unique_tag_rows.append(r)
+        for batch in chunked(unique_tag_rows, 500):
+            sb.table("resource_tags").insert(batch).execute()
+
     print(f"Done. {len(occurrence_payload)} occurrences, "
-          f"{len(priorities_payload)} priorities. "
+          f"{len(priorities_payload)} priorities, "
+          f"{len(tag_rows)} resource tags. "
           f"main_category and main_priority maintained by trigger.")
 
 

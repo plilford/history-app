@@ -16,7 +16,8 @@ export type TimelineGroup =
   | "australasia"
   | "conflicts"
   | "religions"
-  | "major-periods";
+  | "major-periods"
+  | "resources";
 
 // Display order — groups are rendered top-to-bottom in this order. Empty
 // groups (no timelines mapped to them) are hidden by the rendering code.
@@ -30,6 +31,7 @@ export const TIMELINE_GROUP_ORDER: TimelineGroup[] = [
   "conflicts",
   "religions",
   "major-periods",
+  "resources",
 ];
 
 // Human-readable header shown in the picker / search-bar.
@@ -43,6 +45,7 @@ export const TIMELINE_GROUP_LABELS: Record<TimelineGroup, string> = {
   conflicts: "Conflicts",
   religions: "Religions",
   "major-periods": "Major periods",
+  resources: "Resources",
 };
 
 // Slug → group. Unknown slugs default to "major-periods".
@@ -87,6 +90,10 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   // Major periods — eras, movements
   renaissance: "major-periods",
   industrial: "major-periods",
+
+  // Resources — podcasts, books, documentaries (occurrence_type='resource')
+  "the-rest-is-history-podcast": "resources",
+  "popular-history-books": "resources",
 };
 
 export function groupForSlug(slug: string): TimelineGroup {
