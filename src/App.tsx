@@ -573,7 +573,15 @@ function AppInner() {
         (minR.data?.[0] as any)?.start_year ?? FALLBACK_YEAR_MIN;
       const maxStart = (maxStartR.data?.[0] as any)?.start_year ?? FALLBACK_YEAR_MAX;
       const maxEnd = (maxEndR.data?.[0] as any)?.end_year ?? maxStart;
-      const maxYear = Math.max(maxStart, maxEnd, FALLBACK_YEAR_MAX);
+      // Cap at the current year so future-dated entries (e.g. Cloud Atlas,
+      // 2140) don't extend the axis past today. The future-dated rows still
+      // exist in the DB and can be searched / pinned; we just don't let them
+      // stretch the visible scale.
+      const currentYear = new Date().getFullYear();
+      const maxYear = Math.min(
+        currentYear,
+        Math.max(maxStart, maxEnd, FALLBACK_YEAR_MAX),
+      );
       setDataRange({ min: minYear, max: maxYear });
     })();
     return () => {
@@ -741,7 +749,27 @@ function AppInner() {
     scrollToYear(year);
   }
 
-  function handlePickOccurrence(ev: HistoryEvent) {
+  /** Strategy for updating the column layout when navigating to an occurrence.
+   *  - "swap-rightmost-to-main-category" (default — search / suggestions /
+   *    children / resources popup): if the entry's primary slug isn't
+   *    visible, swap it into the rightmost column.
+   *  - "ensure-master-first" (resource-popup tag chip): never disturb the
+   *    column the user came from. If the subject doesn't render on any
+   *    currently-visible timeline, swap MASTER into the FIRST slot so it
+   *    appears somewhere; otherwise leave the layout alone.
+   *  - "none": navigate but never reshuffle columns. */
+  type ColumnStrategy =
+    | "swap-rightmost-to-main-category"
+    | "ensure-master-first"
+    | "none";
+
+  function handlePickOccurrence(
+    ev: HistoryEvent,
+    opts: { columnStrategy?: ColumnStrategy } = {},
+  ) {
+    const columnStrategy: ColumnStrategy =
+      opts.columnStrategy ?? "swap-rightmost-to-main-category";
+
     // Pick the year to centre on: explicit key year > period midpoint > start.
     let target: number | null = ev.key_year ?? null;
     if (target == null && ev.is_period && ev.start_year != null && ev.end_year != null) {
@@ -749,13 +777,27 @@ function AppInner() {
     }
     if (target == null) target = ev.start_year;
 
-    // Make sure the timeline where this occurrence has the highest priority is
-    // visible: if it isn't, swap it in for the rightmost column.
-    if (ev.main_category && !timelineNames.includes(ev.main_category)) {
+    if (columnStrategy === "swap-rightmost-to-main-category") {
+      // Make sure the timeline where this occurrence has the highest priority
+      // is visible: if it isn't, swap it in for the rightmost column.
+      if (ev.main_category && !timelineNames.includes(ev.main_category)) {
+        setTimelineNames((prev) => {
+          if (prev.length === 0) return [ev.main_category!];
+          const next = prev.slice();
+          next[next.length - 1] = ev.main_category!;
+          return next;
+        });
+      }
+    } else if (columnStrategy === "ensure-master-first") {
+      // Caller has already checked (via DB) whether the subject lives on any
+      // currently-visible timeline. We only get here when it doesn't — swap
+      // Master into slot 0 so the flash is visible somewhere. Don't touch
+      // the column the resource popup was opened against.
       setTimelineNames((prev) => {
-        if (prev.length === 0) return [ev.main_category!];
+        if (prev[0] === "Master") return prev;
+        if (prev.length === 0) return ["Master"];
         const next = prev.slice();
-        next[next.length - 1] = ev.main_category!;
+        next[0] = "Master";
         return next;
       });
     }
@@ -1524,6 +1566,11 @@ function AppInner() {
             setHovered(null);
             setUmbrellaForChildren({ umbrella: ev });
           }}
+          onShowParent={(ev) => {
+            clearTimers();
+            setHovered(null);
+            handleShowParent(ev);
+          }}
           resourceCount={resourcesBySubject.get(hovered.event.id)?.size ?? 0}
           onShowResources={(ev) => {
             clearTimers();
@@ -1538,17 +1585,42 @@ function AppInner() {
               : []
           }
           onPickSubject={async (sid) => {
-            // Fetch the subject + reuse the search-pick handler.
-            const { data } = await supabase
+            // Fetch the subject. Don't close the resource popup — the user
+            // explicitly asked to follow a tag, but should still be able to
+            // pick a different one (or close it themselves).
+            const { data: subject } = await supabase
               .from("occurrences")
               .select("*")
               .eq("id", sid)
               .single();
-            if (data) {
-              clearTimers();
-              setHovered(null);
-              handlePickOccurrence(data as HistoryEvent);
+            if (!subject) return;
+
+            // Does the subject have a priority row on any currently-visible
+            // timeline? If yes, leave the column layout alone — it will
+            // render in-place. If no, swap Master into slot 0 (unless Master
+            // is already first) so the flash has somewhere to land. Either
+            // way the column the resource popup is anchored to is preserved.
+            const visibleTimelineIds = timelines
+              .filter((t) => timelineNames
+                .slice(0, visibleColumnCount)
+                .includes(t.name))
+              .map((t) => t.id);
+            let inCurrentTimelines = false;
+            if (visibleTimelineIds.length > 0) {
+              const { data: pri } = await supabase
+                .from("occurrence_timeline_priorities")
+                .select("timeline_id")
+                .eq("occurrence_id", sid)
+                .in("timeline_id", visibleTimelineIds)
+                .limit(1);
+              inCurrentTimelines = (pri ?? []).length > 0;
             }
+
+            handlePickOccurrence(subject as HistoryEvent, {
+              columnStrategy: inCurrentTimelines
+                ? "none"
+                : "ensure-master-first",
+            });
           }}
         />
       )}
@@ -2881,35 +2953,31 @@ function OccurrenceBox({
           </span>
         )}
       </div>
-      {/* Bottom-left: ↰ child indicator. Only rendered when this entry rolls
-          up to a parent umbrella. Click opens the ChildrenPopup on the
-          parent, with this entry highlighted in the list. */}
-      {event.first_zoom_out_id != null && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onShowParent(event);
-          }}
-          aria-label={`Part of ${event.first_zoom_out ?? "umbrella"} — show siblings`}
-          title={
-            event.first_zoom_out
-              ? `Part of ${event.first_zoom_out} — click for siblings`
-              : "Click for siblings"
-          }
-          className="absolute bottom-0.5 left-1 leading-none text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300"
-          style={{ fontSize: Math.max(10, Math.min(13, titleFontPx - 3)) }}
-        >
-          <span aria-hidden>↰</span>
-        </button>
-      )}
-
-      {/* Bottom-right: umbrella ⊞-N badge (clickable, when this entry IS an
-          umbrella) + always-shown favourite heart. The favourite renders
-          ♡ outline when not set, ♥ filled when set — so users always know
-          they can favourite the entry by opening the popup. */}
+      {/* Bottom-right cluster: ↰ child indicator (when this entry rolls up to
+          an umbrella), ⊞-N umbrella badge (when this entry IS an umbrella),
+          and the always-shown favourite heart. ↰ goes left of ⊞ when both
+          are present so chronology reads left → right: parent ← me → kids. */}
       <div className="absolute bottom-0.5 right-1 flex items-baseline gap-1.5 leading-none">
+        {event.first_zoom_out_id != null && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowParent(event);
+            }}
+            aria-label={`Part of ${event.first_zoom_out ?? "umbrella"} — show siblings`}
+            title={
+              event.first_zoom_out
+                ? `Part of ${event.first_zoom_out} — click for siblings`
+                : "Click for siblings"
+            }
+            className="leading-none text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300"
+            style={{ fontSize: Math.max(10, Math.min(13, titleFontPx - 3)) }}
+          >
+            <span aria-hidden>↰</span>
+          </button>
+        )}
         {childCount > 0 && (
           <button
             type="button"

@@ -36,6 +36,11 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   /** Click handler for the umbrella stack badge — opens the ChildrenPopup
    *  at the app level. */
   onShowChildren?: (event: EventWithPriority) => void;
+  /** Click handler for the ↰ child indicator — fires when the popup's event
+   *  rolls up to an umbrella. Mirrors the per-box indicator behaviour:
+   *  fetches the umbrella + opens the ChildrenPopup with this entry
+   *  highlighted. */
+  onShowParent?: (event: EventWithPriority) => void;
   /** Number of resources (podcasts, books, …) tagged to this subject.
    *  0 = no badge. */
   resourceCount?: number;
@@ -57,6 +62,7 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   onSignInRequest,
   childCount = 0,
   onShowChildren,
+  onShowParent,
   resourceCount = 0,
   onShowResources,
   taggedSubjects = [],
@@ -158,6 +164,24 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             {(event.display_date ?? event.start_year ?? "") +
               (event.date_uncertain && !String(event.display_date ?? "").endsWith("*") ? "*" : "")}
           </span>
+          {event.first_zoom_out_id != null && onShowParent && (
+            <button
+              type="button"
+              onClick={() => {
+                onShowParent(event);
+                onClose();
+              }}
+              aria-label={`Part of ${event.first_zoom_out ?? "umbrella"} — show siblings`}
+              title={
+                event.first_zoom_out
+                  ? `Part of ${event.first_zoom_out} — click for siblings`
+                  : "Click for siblings"
+              }
+              className="shrink-0 -mt-1 h-7 px-1.5 flex items-center rounded text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
+            >
+              <span aria-hidden className="text-base leading-none">↰</span>
+            </button>
+          )}
           {childCount > 0 && onShowChildren && (
             <button
               type="button"
@@ -167,10 +191,10 @@ export const EventPopup = forwardRef<HTMLDivElement, {
               }}
               aria-label={`Show ${childCount} children of ${event.title}`}
               title={`${childCount} children — click to list`}
-              className="shrink-0 -mt-1 h-7 px-1.5 flex items-baseline gap-0.5 rounded font-bold text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
+              className="shrink-0 -mt-1 h-7 px-1.5 flex items-baseline gap-0.5 rounded text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
             >
-              <span aria-hidden className="text-base leading-none">⊞</span>
-              <span aria-hidden className="text-sm tabular-nums">{childCount}</span>
+              <span aria-hidden className="text-sm leading-none">⊞</span>
+              <span aria-hidden className="text-xs tabular-nums">{childCount}</span>
             </button>
           )}
           {resourceCount > 0 && onShowResources && (

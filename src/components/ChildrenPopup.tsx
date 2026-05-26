@@ -4,11 +4,12 @@ import { supabase } from "../lib/supabase";
 import { normalizeOngoing } from "../lib/dateFormat";
 
 /**
- * Modal showing every child of a given umbrella entry, ordered by global
- * priority (main_priority desc), with priority-bucket colouring:
- *   - top 10  → dark blue  (the marquee items)
- *   - next 10 → light blue
- *   - rest    → dark grey
+ * Modal showing every child of a given umbrella entry, ordered chronologically
+ * (by end_year for periods, then start_year, then title), with a responsive
+ * priority-bucket colouring that scales to umbrella size:
+ *   - small umbrellas (≤40 children): top quarter → dark blue, next quarter
+ *     → light blue (rounded up; e.g. 5 children → 2 dark, 1 light, 2 rest)
+ *   - large umbrellas: capped at 10 dark + 10 light (the original scheme)
  *
  * Children = any occurrence whose first_zoom_out_id or second_zoom_out_id
  * matches the umbrella's id. The list also includes the begins/ends point
@@ -39,6 +40,9 @@ export function ChildrenPopup({
     let cancelled = false;
     setLoading(true);
     (async () => {
+      // Two ordered lists: by priority (for tier-bucket colouring) and by
+      // chronology (for display order). We fetch once and sort twice in JS
+      // to avoid a duplicate round-trip.
       const { data, error } = await supabase
         .from("occurrences")
         .select("*")
@@ -61,6 +65,22 @@ export function ChildrenPopup({
     };
   }, [umbrella.id]);
 
+  // Chronological sort: by END year for period entries (so a period ending
+  // first appears before a period ending later), then by start year, then
+  // by title for stable ordering. Falls back to start_year when end is null
+  // (point events) so they fold into the timeline naturally.
+  const chronological = useMemo(() => {
+    return [...children].sort((a, b) => {
+      const aEnd = a.end_year ?? a.start_year ?? Number.POSITIVE_INFINITY;
+      const bEnd = b.end_year ?? b.start_year ?? Number.POSITIVE_INFINITY;
+      if (aEnd !== bEnd) return aEnd - bEnd;
+      const aStart = a.start_year ?? Number.POSITIVE_INFINITY;
+      const bStart = b.start_year ?? Number.POSITIVE_INFINITY;
+      if (aStart !== bStart) return aStart - bStart;
+      return (a.title ?? "").localeCompare(b.title ?? "");
+    });
+  }, [children]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -76,17 +96,23 @@ export function ChildrenPopup({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return children;
-    return children.filter((c) => (c.title ?? "").toLowerCase().includes(q));
-  }, [children, query]);
+    if (!q) return chronological;
+    return chronological.filter((c) => (c.title ?? "").toLowerCase().includes(q));
+  }, [chronological, query]);
 
-  // Compute priority-tier index using the ORIGINAL ranked list (children),
-  // so the colour stays stable while the user searches. Index 0..9 = top 10,
-  // 10..19 = next 10, 20+ = rest.
+  // Compute priority-tier index using the priority-ordered list (children),
+  // so the colour reflects notability regardless of chronological position.
+  // Bucket sizes scale to umbrella size: for small umbrellas the top quarter
+  // (rounded up) is dark blue and the next quarter is light blue; for large
+  // umbrellas the original 10/10 cap kicks in.
   const tierByIndex = useMemo(() => {
+    const n = children.length;
+    // Round up so even tiny umbrellas (3-4 entries) get at least one of each.
+    const topSize = Math.min(10, Math.max(1, Math.ceil(n / 4)));
+    const midSize = Math.min(10, Math.max(1, Math.ceil(n / 4)));
     const m = new Map<number, "top" | "mid" | "rest">();
     children.forEach((c, i) => {
-      m.set(c.id, i < 10 ? "top" : i < 20 ? "mid" : "rest");
+      m.set(c.id, i < topSize ? "top" : i < topSize + midSize ? "mid" : "rest");
     });
     return m;
   }, [children]);
