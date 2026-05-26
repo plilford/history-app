@@ -36,6 +36,11 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   /** Click handler for the umbrella stack badge — opens the ChildrenPopup
    *  at the app level. */
   onShowChildren?: (event: EventWithPriority) => void;
+  /** Number of resources (podcasts, books, …) tagged to this subject.
+   *  0 = no badge. */
+  resourceCount?: number;
+  /** Click handler for the 📚 resources badge — opens the ResourcesPopup. */
+  onShowResources?: (subject: EventWithPriority) => void;
 }>(function EventPopup({
   event,
   anchorRect,
@@ -46,6 +51,8 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   onSignInRequest,
   childCount = 0,
   onShowChildren,
+  resourceCount = 0,
+  onShowResources,
 }, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -156,6 +163,21 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             >
               <span aria-hidden className="text-base leading-none">⊞</span>
               <span aria-hidden className="text-sm tabular-nums">{childCount}</span>
+            </button>
+          )}
+          {resourceCount > 0 && onShowResources && (
+            <button
+              type="button"
+              onClick={() => {
+                onShowResources(event);
+                onClose();
+              }}
+              aria-label={`Show ${resourceCount} resources about ${event.title}`}
+              title={`${resourceCount} resources — click to list`}
+              className="shrink-0 -mt-1 h-7 px-1.5 flex items-baseline gap-0.5 rounded font-bold text-teal-700 dark:text-teal-300 hover:text-teal-900 dark:hover:text-teal-200 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
+            >
+              <span aria-hidden className="text-base leading-none">📚</span>
+              <span aria-hidden className="text-sm tabular-nums">{resourceCount}</span>
             </button>
           )}
           <button

@@ -98,7 +98,32 @@ export function colorFor(occ: Pick<Occurrence,
   | "weight_asia"
   | "weight_australasia"
   | "weight_africa"
->): OccurrenceColor {
+  | "occurrence_type"
+> & { resource_palette?: "teal" | "purple" }): OccurrenceColor {
+  // Resource-type occurrences override the region scheme entirely — they
+  // live in their own dedicated timelines and use a uniform palette:
+  // teal for non-fiction (podcasts, history books, documentaries) and
+  // purple for fiction (historical novels). The caller passes the palette
+  // hint based on the timeline slug; default = teal.
+  if (occ.occurrence_type === "resource") {
+    const palette = occ.resource_palette ?? "teal";
+    if (palette === "purple") {
+      return {
+        region: "global",
+        hue: 280,
+        fill: "hsl(280 55% 50% / 0.35)",
+        border: "hsl(280 60% 42%)",
+        line: "hsl(280 65% 55% / 0.8)",
+      };
+    }
+    return {
+      region: "global",
+      hue: 180,
+      fill: "hsl(180 55% 38% / 0.35)",
+      border: "hsl(180 60% 30%)",
+      line: "hsl(180 65% 40% / 0.8)",
+    };
+  }
   const region = dominantRegion(occ);
 
   // Per-occurrence hue offset in [-HUE_VARIATION, +HUE_VARIATION].

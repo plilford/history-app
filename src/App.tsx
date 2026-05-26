@@ -7,6 +7,7 @@ import { TimelinePicker } from "./components/TimelinePicker";
 import { AuthModal } from "./components/AuthModal";
 import { SuggestionsPopup } from "./components/SuggestionsPopup";
 import { ChildrenPopup } from "./components/ChildrenPopup";
+import { ResourcesPopup } from "./components/ResourcesPopup";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
 import { ThemeProvider, useTheme } from "./lib/theme";
@@ -217,6 +218,10 @@ function AppInner() {
     { umbrella: HistoryEvent; highlightChildId?: number } | null
   >(null);
 
+  /** When set, the ResourcesPopup is open showing podcasts/books tagged
+   *  to this subject. */
+  const [subjectForResources, setSubjectForResources] = useState<HistoryEvent | null>(null);
+
   /** Open the ChildrenPopup for the parent umbrella of a given child entry.
    *  Fetches the parent (it might not be in any currently-loaded column's
    *  events), then opens the popup with the source child highlighted. */
@@ -413,38 +418,116 @@ function AppInner() {
     () => new Map(),
   );
 
+  // ---- Resource tag indexes ------------------------------------------------
+  // Resources (podcast episodes, books, …) live in their own timelines and
+  // are placed in the renderer by their TAGGED SUBJECTS, not by date. Two
+  // indexes drive that:
+  //
+  //   tagsByResource   — for each resource id, the set of subject occurrence
+  //                      ids it tags. Used by resource TimelineColumns to
+  //                      decide whether to render a resource (any tag in
+  //                      viewport range?) and at what year (the earliest
+  //                      in-viewport tag's start year).
+  //   resourcesBySubject — reverse lookup. For each subject id, the set of
+  //                      resource ids that tag it. Used by EventPopup to
+  //                      show a "📚 N" badge and a popup list.
+  //
+  // Plus we need each subject's (start_year, end_year) so we can decide
+  // "is this subject in the viewport?". Stored in subjectDates.
+  const [tagsByResource, setTagsByResource] = useState<Map<number, Set<number>>>(
+    () => new Map(),
+  );
+  const [resourcesBySubject, setResourcesBySubject] = useState<Map<number, Set<number>>>(
+    () => new Map(),
+  );
+  const [subjectDates, setSubjectDates] = useState<Map<number, { start: number; end: number | null }>>(
+    () => new Map(),
+  );
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Paginate through occurrences pulling just (id, first_zoom_out_id,
-      // second_zoom_out_id). PostgREST caps each page at 1000 rows.
-      const map = new Map<number, number>();
-      let offset = 0;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { data, error } = await supabase
-          .from("occurrences")
-          .select("first_zoom_out_id, second_zoom_out_id")
-          .or("first_zoom_out_id.not.is.null,second_zoom_out_id.not.is.null")
-          .range(offset, offset + 999);
-        if (error) {
-          console.error("umbrella-count fetch failed", error);
-          return;
+      // Pulling three things in parallel:
+      //   - (first_zoom_out_id, second_zoom_out_id) for umbrella counts
+      //   - (id, start_year, end_year) for subjectDates
+      //   - resource_tags (resource_id, subject_id) for the tag indexes
+      const pages = async (cols: string, where: string | null = null) => {
+        const out: any[] = [];
+        let off = 0;
+        while (true) {
+          let q = supabase.from("occurrences").select(cols).range(off, off + 999);
+          if (where) q = q.or(where);
+          const { data, error } = await q;
+          if (error) throw error;
+          const rows = data ?? [];
+          out.push(...(rows as any[]));
+          if (rows.length < 1000) break;
+          off += 1000;
         }
-        const rows = data ?? [];
-        for (const r of rows as Array<{ first_zoom_out_id: number | null; second_zoom_out_id: number | null }>) {
-          if (r.first_zoom_out_id != null) {
-            map.set(r.first_zoom_out_id, (map.get(r.first_zoom_out_id) ?? 0) + 1);
-          }
-          if (r.second_zoom_out_id != null) {
-            map.set(r.second_zoom_out_id, (map.get(r.second_zoom_out_id) ?? 0) + 1);
-          }
+        return out;
+      };
+
+      try {
+        const [umbRows, dateRows, tagRows] = await Promise.all([
+          pages("first_zoom_out_id, second_zoom_out_id",
+                "first_zoom_out_id.not.is.null,second_zoom_out_id.not.is.null"),
+          pages("id, start_year, end_year, occurrence_type"),
+          (async () => {
+            const out: Array<{ resource_id: number; subject_id: number }> = [];
+            let off = 0;
+            while (true) {
+              const { data, error } = await supabase
+                .from("resource_tags")
+                .select("resource_id, subject_id")
+                .range(off, off + 999);
+              if (error) throw error;
+              const rows = data ?? [];
+              out.push(...(rows as any[]));
+              if (rows.length < 1000) break;
+              off += 1000;
+            }
+            return out;
+          })(),
+        ]);
+
+        if (cancelled) return;
+
+        // Umbrella counts.
+        const umbMap = new Map<number, number>();
+        for (const r of umbRows) {
+          if (r.first_zoom_out_id != null)
+            umbMap.set(r.first_zoom_out_id, (umbMap.get(r.first_zoom_out_id) ?? 0) + 1);
+          if (r.second_zoom_out_id != null)
+            umbMap.set(r.second_zoom_out_id, (umbMap.get(r.second_zoom_out_id) ?? 0) + 1);
         }
-        if (rows.length < 1000) break;
-        offset += 1000;
+        setUmbrellaCounts(umbMap);
+
+        // Subject dates — NON-resource occurrences only. The resource column
+        // uses these to determine which of its tagged subjects are visible.
+        const datesMap = new Map<number, { start: number; end: number | null }>();
+        for (const r of dateRows) {
+          if (r.occurrence_type === "resource") continue;
+          if (r.start_year == null) continue;
+          datesMap.set(r.id, { start: r.start_year, end: r.end_year ?? null });
+        }
+        setSubjectDates(datesMap);
+
+        // Tag indexes — forward + reverse.
+        const tags = new Map<number, Set<number>>();
+        const reverse = new Map<number, Set<number>>();
+        for (const t of tagRows) {
+          let fwd = tags.get(t.resource_id);
+          if (!fwd) { fwd = new Set(); tags.set(t.resource_id, fwd); }
+          fwd.add(t.subject_id);
+          let rev = reverse.get(t.subject_id);
+          if (!rev) { rev = new Set(); reverse.set(t.subject_id, rev); }
+          rev.add(t.resource_id);
+        }
+        setTagsByResource(tags);
+        setResourcesBySubject(reverse);
+      } catch (err) {
+        console.error("app-load fetches failed", err);
       }
-      if (cancelled) return;
-      setUmbrellaCounts(map);
     })();
     return () => {
       cancelled = true;
@@ -1399,6 +1482,8 @@ function AppInner() {
               umbrellaCounts={umbrellaCounts}
               onShowChildren={(umbrella) => setUmbrellaForChildren({ umbrella })}
               onShowParent={handleShowParent}
+              tagsByResource={tagsByResource}
+              subjectDates={subjectDates}
             />
           ))}
         </div>
@@ -1428,6 +1513,12 @@ function AppInner() {
             clearTimers();
             setHovered(null);
             setUmbrellaForChildren({ umbrella: ev });
+          }}
+          resourceCount={resourcesBySubject.get(hovered.event.id)?.size ?? 0}
+          onShowResources={(ev) => {
+            clearTimers();
+            setHovered(null);
+            setSubjectForResources(ev);
           }}
         />
       )}
@@ -1463,6 +1554,15 @@ function AppInner() {
           umbrella={umbrellaForChildren.umbrella}
           highlightedChildId={umbrellaForChildren.highlightChildId}
           onClose={() => setUmbrellaForChildren(null)}
+          onPickOccurrence={(occ) => handlePickOccurrence(occ as HistoryEvent)}
+        />
+      )}
+
+      {subjectForResources && (
+        <ResourcesPopup
+          subject={subjectForResources}
+          resourceIds={Array.from(resourcesBySubject.get(subjectForResources.id) ?? [])}
+          onClose={() => setSubjectForResources(null)}
           onPickOccurrence={(occ) => handlePickOccurrence(occ as HistoryEvent)}
         />
       )}
@@ -1731,6 +1831,8 @@ function TimelineColumn({
   umbrellaCounts,
   onShowChildren,
   onShowParent,
+  tagsByResource,
+  subjectDates,
 }: {
   timeline: Timeline;
   columnIndex: number;
@@ -1774,6 +1876,12 @@ function TimelineColumn({
   /** Called when the user clicks a child's ↰ indicator — opens the
    *  ChildrenPopup on the parent umbrella with the source child highlighted. */
   onShowParent: (childEvent: EventWithPriority) => void;
+  /** Forward index: resource id → set of subject ids it tags. Used by
+   *  resource timelines to drive subject-anchored placement. */
+  tagsByResource: Map<number, Set<number>>;
+  /** Subject id → {start, end} year. Lets the resource column decide
+   *  which tagged subjects fall inside the current viewport. */
+  subjectDates: Map<number, { start: number; end: number | null }>;
 }) {
   const { yearMin, yearMax, totalHeight } = scale;
   const [events, setEvents] = useState<EventWithPriority[]>([]);
@@ -1993,6 +2101,66 @@ function TimelineColumn({
       ? eventsAfterDedup
       : eventsAfterDedup.filter((e) => !e.is_full_life);
 
+    // --- Subject-anchored placement for resource timelines ------------------
+    // Resources (podcasts, books, …) are placed based on their TAGGED
+    // SUBJECTS' years, not their own. A resource appears in its column only
+    // when at least one of its tagged subjects overlaps the current viewport
+    // year range. Period subjects count as "in viewport" when the range
+    // intersects the viewport, not just when the endpoint is inside.
+    //
+    // Override the resource's start_year/end_year/key_year to the chosen
+    // subject's dates so the existing placement code anchors the box where
+    // the subject would render.
+    const eventsForPlacement: EventWithPriority[] = (() => {
+      if (!timeline.is_resource_timeline) return eventsAfterExclude;
+      const yTopV = scale.pxToYear(viewportScrollTop - HEADER_HEIGHT_PX);
+      const yBottomV = scale.pxToYear(
+        viewportScrollTop + viewportClientHeight - HEADER_HEIGHT_PX,
+      );
+      const yMin = Math.min(yTopV, yBottomV);
+      const yMax = Math.max(yTopV, yBottomV);
+      const out: EventWithPriority[] = [];
+      for (const ev of eventsAfterExclude) {
+        const tagSet = tagsByResource.get(ev.id);
+        if (!tagSet || tagSet.size === 0) {
+          // No tags — fall back to date-based: only include if the resource's
+          // own years overlap the viewport.
+          const sy = ev.start_year;
+          if (sy == null) continue;
+          const ey = ev.end_year ?? sy;
+          if (ey < yMin || sy > yMax) continue;
+          out.push(ev);
+          continue;
+        }
+        // Find the FIRST overlapping tagged subject; place the resource at
+        // that subject's date range. Picking "first" is good enough — for
+        // resources tagged with multiple subjects in viewport (rare),
+        // priority ordering would matter but is deferred.
+        let best: { start: number; end: number | null } | null = null;
+        for (const subjectId of tagSet) {
+          const dates = subjectDates.get(subjectId);
+          if (!dates) continue;
+          const subStart = dates.start;
+          const subEnd = dates.end ?? dates.start;
+          if (subEnd < yMin || subStart > yMax) continue;
+          best = { start: subStart, end: dates.end };
+          break;
+        }
+        if (!best) continue;
+        // Clone the event with the subject's dates substituted in. The
+        // downstream placement pipeline reads start_year/end_year/key_year
+        // and uses them to position the box.
+        out.push({
+          ...ev,
+          start_year: best.start,
+          end_year: best.end,
+          key_year: best.start,
+          is_period: best.end != null && best.end !== best.start,
+        });
+      }
+      return out;
+    })();
+
     // --- Two-level rollup ----------------------------------------------------
     // Decide rollup level from the currently-visible year span:
     //   span <  80 yr  -> level 0  (leaf events)
@@ -2016,7 +2184,7 @@ function TimelineColumn({
     const titleKey = (e: EventWithPriority) =>
       (e.title ?? "").trim().toLowerCase();
     const umbrellaByTitle = new Map<string, EventWithPriority>();
-    for (const e of eventsAfterExclude) {
+    for (const e of eventsForPlacement) {
       const k = titleKey(e);
       if (k) umbrellaByTitle.set(k, e);
     }
@@ -2028,7 +2196,7 @@ function TimelineColumn({
     // Without this check, the previous span>10 rule wrongly hid every long
     // monarch reign (Victoria, George V, George VI, …) at leaf zoom.
     const referencedUmbrellaTitles = new Set<string>();
-    for (const e of eventsAfterExclude) {
+    for (const e of eventsForPlacement) {
       if (e.first_zoom_out)
         referencedUmbrellaTitles.add(e.first_zoom_out.trim().toLowerCase());
       if (e.second_zoom_out)
@@ -2050,7 +2218,7 @@ function TimelineColumn({
     const flashedId = flash?.id ?? null;
     const seen = new Set<number>();
     const rolledEvents: EventWithPriority[] = [];
-    for (const e of eventsAfterExclude) {
+    for (const e of eventsForPlacement) {
       const isFlashed = e.id === flashedId;
       let target: EventWithPriority = e;
       if (!isFlashed) {
@@ -2333,6 +2501,9 @@ function TimelineColumn({
     regionWeighted,
     excludeIds,
     showLifespans,
+    timeline.is_resource_timeline,
+    tagsByResource,
+    subjectDates,
   ]);
 
   // Granularity for date labels inside boxes. Based on the year-span currently
