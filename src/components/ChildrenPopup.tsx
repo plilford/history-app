@@ -65,18 +65,18 @@ export function ChildrenPopup({
     };
   }, [umbrella.id]);
 
-  // Chronological sort: by END year for period entries (so a period ending
-  // first appears before a period ending later), then by start year, then
-  // by title for stable ordering. Falls back to start_year when end is null
-  // (point events) so they fold into the timeline naturally.
+  // Reverse-chronological sort: most recent at the top. Sort key is end_year
+  // for period entries (a period ending later appears before one ending
+  // earlier), then start_year, then title for stable ordering. Falls back to
+  // start_year when end is null (point events).
   const chronological = useMemo(() => {
     return [...children].sort((a, b) => {
-      const aEnd = a.end_year ?? a.start_year ?? Number.POSITIVE_INFINITY;
-      const bEnd = b.end_year ?? b.start_year ?? Number.POSITIVE_INFINITY;
-      if (aEnd !== bEnd) return aEnd - bEnd;
-      const aStart = a.start_year ?? Number.POSITIVE_INFINITY;
-      const bStart = b.start_year ?? Number.POSITIVE_INFINITY;
-      if (aStart !== bStart) return aStart - bStart;
+      const aEnd = a.end_year ?? a.start_year ?? Number.NEGATIVE_INFINITY;
+      const bEnd = b.end_year ?? b.start_year ?? Number.NEGATIVE_INFINITY;
+      if (aEnd !== bEnd) return bEnd - aEnd;
+      const aStart = a.start_year ?? Number.NEGATIVE_INFINITY;
+      const bStart = b.start_year ?? Number.NEGATIVE_INFINITY;
+      if (aStart !== bStart) return bStart - aStart;
       return (a.title ?? "").localeCompare(b.title ?? "");
     });
   }, [children]);
