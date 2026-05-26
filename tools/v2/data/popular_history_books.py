@@ -490,7 +490,7 @@ _NONFICTION: list[dict] = [
      "description": "Ron Chernow's massive biography that inspired the musical.",
      "resource_link": "https://en.wikipedia.org/wiki/Alexander_Hamilton_(Chernow_book)",
      "priorities": {"popular-history-books": 920000},
-     "tags": []},
+     "tags": ['Alexander Hamilton']},
 
     {"id": 1_009_106, "type": "resource", "subtype": "book-nonfiction",
      "title": "Washington: A Life (Chernow, 2010)",
@@ -934,7 +934,7 @@ _NONFICTION: list[dict] = [
      "description": "David McCullough's Pulitzer-winning biography — basis of the HBO miniseries.",
      "resource_link": "https://en.wikipedia.org/wiki/John_Adams_(book)",
      "priorities": {"popular-history-books": 900000},
-     "tags": ["Presidency of John Adams"]},
+     "tags": ['Presidency of John Adams', 'John Adams']},
 
     {"id": 1_009_222, "type": "resource", "subtype": "book-nonfiction",
      "title": "Truman (McCullough, 1992)",
@@ -1233,7 +1233,7 @@ _NONFICTION: list[dict] = [
      "description": "Ulysses S. Grant's autobiography, finished on his deathbed.",
      "resource_link": "https://en.wikipedia.org/wiki/Personal_Memoirs_of_Ulysses_S._Grant",
      "priorities": {"popular-history-books": 870000},
-     "tags": ["Presidency of Ulysses S. Grant", "American Civil War"]},
+     "tags": ['Presidency of Ulysses S. Grant', 'American Civil War', 'Ulysses S. Grant']},
 
     {"id": 1_009_287, "type": "resource", "subtype": "book-nonfiction",
      "title": "The Diary of Frida Kahlo (Kahlo, 1995)",
@@ -1265,7 +1265,7 @@ _NONFICTION: list[dict] = [
      "description": "Mark Bowden on the Battle of Mogadishu.",
      "resource_link": "https://en.wikipedia.org/wiki/Black_Hawk_Down_(book)",
      "priorities": {"popular-history-books": 870000},
-     "tags": []},
+     "tags": ['Battle of Mogadishu']},
 
     {"id": 1_009_291, "type": "resource", "subtype": "book-nonfiction",
      "title": "A People's History of the United States (Zinn, 1980)",
@@ -1359,7 +1359,7 @@ _FICTION: list[dict] = [
      "description": "Marguerite Yourcenar's fictional autobiography of Emperor Hadrian.",
      "resource_link": "https://en.wikipedia.org/wiki/Memoirs_of_Hadrian",
      "priorities": {"popular-history-books": 880000},
-     "tags": ["Reign of Hadrian"]},
+     "tags": ['Reign of Hadrian', 'Hadrian']},
 
     {"id": 1_009_502, "type": "resource", "subtype": "book-fiction",
      "title": "The Last Days of Pompeii (Bulwer-Lytton, 1834)",
@@ -1593,7 +1593,7 @@ _FICTION: list[dict] = [
      "description": "Philippa Gregory's novel of Mary Boleyn, sister of Anne.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Other_Boleyn_Girl",
      "priorities": {"popular-history-books": 850000},
-     "tags": ["Execution of Anne Boleyn"]},
+     "tags": ['Execution of Anne Boleyn', 'Mary Boleyn']},
 
     # ===== 18th c =============================================================
     {"id": 1_009_570, "type": "resource", "subtype": "book-fiction",
@@ -2069,7 +2069,7 @@ _FICTION: list[dict] = [
      "description": "Miljenko Jergović's stories of life under the siege of Sarajevo.",
      "resource_link": "https://en.wikipedia.org/wiki/Miljenko_Jergovi%C4%87",
      "priorities": {"popular-history-books": 770000},
-     "tags": []},
+     "tags": ['Siege of Sarajevo']},
 
     {"id": 1_009_679, "type": "resource", "subtype": "book-fiction",
      "title": "Cold Mountain (Frazier, 1997)",

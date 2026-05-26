@@ -1382,7 +1382,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Tom Holland and Dominic Sandbrook examine Henry VIII and his six wives, weaving biographical sketches with political and religious context. They open with Anne Boleyn’s alleged last lines and stress Henry’s charisma, insecurity stemming from the Wars of the Roses, and rivalry with Francis I and Charles V. The discussion follows each wife: Catherine of Aragon’s Spanish pedigree and fall-out over succession; Anne Boleyn’s rise and role in triggering England’s break with Rome; Jane Seymour’s bri...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT6913826589.mp3?updated=1777395007',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Henry VIII', 'English Reformation', 'Wars of the Roses', 'Sack of Rome (1527)', 'Dissolution of the monasteries', 'Thomas Cranmer', 'Francis I of France', 'Henry VII of England', 'Mary I of England', 'Henry VI of England', 'Thomas Cromwell', 'Thomas More'],
+     "tags": ['Henry VIII', 'English Reformation', 'Wars of the Roses', 'Sack of Rome (1527)', 'Dissolution of the monasteries', 'Thomas Cranmer', 'Francis I of France', 'Henry VII of England', 'Mary I of England', 'Henry VI of England', 'Thomas Cromwell', 'Thomas More', 'Catherine of Aragon', 'Jane Seymour', 'Catherine Howard', 'Catherine Parr', 'Mary Boleyn'],
     },
     {
      "id": 1_008_112,
@@ -2070,7 +2070,7 @@ OCCURRENCES: list[dict] = [
      "description": 'In this special "Historical Love Island" episode of The Rest Is History, hosts Tom Holland and Dominic Sandbrook are joined by Dominic\'s daughter, Katie, who acts as the Love Island expert. The episode maps Love Island archetypes onto historical figures — from jesters and minxes to devoted partners and accidental heartbreakers — and sketches eight contestants (male and female) from a wide chronological range. Notable pairings discussed include Charles II of England, Catherine Howard, Peter th...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT7719682575.mp3?updated=1692015923',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Marie Antoinette', 'Battle of the Nile'],
+     "tags": ['Marie Antoinette', 'Battle of the Nile', 'Catherine Howard'],
     },
     {
      "id": 1_008_169,
@@ -2130,7 +2130,7 @@ OCCURRENCES: list[dict] = [
      "description": "Hosts Tom Holland and Dominic Sandbrook present a whimsical but informative episode listing their seven greatest dogs in history. They open with Boson, Lord Byron's dog, then discuss Checkers, Richard Nixon’s famous cocker spaniel and the 1952 “Checkers speech.” They examine Greyfriars Bobby and the mixture of legend and later embellishment surrounding the Edinburgh terrier, and touch on Eleanor Atkinson’s novel that popularized the tale. The episode covers Adolf Hitler’s dogs (including Blon...",
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT5170761413.mp3?updated=1777394160',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Battle of Trafalgar'],
+     "tags": ['Battle of Trafalgar', 'Richard Nixon'],
     },
     {
      "id": 1_008_174,
@@ -2421,7 +2421,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook discuss the life, death and posthumous cult of Antinous, the exceptionally beautiful young Greek associated with Emperor Hadrian. They outline Antinous’s origins in Bithynia, his education and travels with Hadrian, and the circumstances of his drowning on the Nile during the festival of Osiris around 130 CE. The episode examines Roman and Greek sexual norms, the role of delicati and eunuchs, and why Antinous’s Greek identity and mythic resonances (Ganym...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT4184410900.mp3?updated=1777394884',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Oscar Wilde'],
+     "tags": ['Oscar Wilde', 'Hadrian'],
     },
     {
      "id": 1_008_198,
@@ -2869,7 +2869,7 @@ OCCURRENCES: list[dict] = [
      "description": "This episode is the second Rest Is History instalment focused on oil, featuring Helen Thompson, Professor of Political Economy at Cambridge. Thompson and the hosts (Tom Holland and Dominic Sandbrook) examine oil's political and geopolitical influence across the twentieth and twenty-first centuries: how US oil shaped domestic politics (notably Texas and figures like Lyndon B. Johnson), cultural reflections in shows like Dallas, and the role of oil in both Gulf Wars. They discuss Europe's faile...",
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT4572551005.mp3?updated=1777394988',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Cuban Missile Crisis', 'Russian invasion of Ukraine', 'Suez Crisis', 'Vladimir Putin', 'John F. Kennedy'],
+     "tags": ['Cuban Missile Crisis', 'Russian invasion of Ukraine', 'Suez Crisis', 'Vladimir Putin', 'John F. Kennedy', 'Lyndon B. Johnson'],
     },
     {
      "id": 1_008_234,
@@ -3622,7 +3622,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook trace the history of post‑war German democracy by running through successive West German and German chancellors up to Angela Merkel. They open with the devastation of 1945 and the mixed idea of Stunde Null, then discuss Konrad Adenauer’s pragmatic rebuilding and early Cold War choices, Ludwig Erhard’s technocratic economic role, and the controversy around Kurt Georg Kiesinger’s Nazi past. Willy Brandt’s Ostpolitik and symbolic gestures are covered, as a...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT6085378369.mp3?updated=1777394990',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Adolf Hitler', 'Siege of Leningrad', 'German reunification', 'Margaret Thatcher', 'Vladimir Putin', 'Henry Kissinger', 'Battle of Moscow', 'Warsaw Ghetto Uprising', 'Fukushima nuclear disaster', 'John F. Kennedy', 'François Mitterrand', 'Tony Blair'],
+     "tags": ['Adolf Hitler', 'Siege of Leningrad', 'German reunification', 'Margaret Thatcher', 'Vladimir Putin', 'Henry Kissinger', 'Battle of Moscow', 'Warsaw Ghetto Uprising', 'Fukushima nuclear disaster', 'John F. Kennedy', 'François Mitterrand', 'Tony Blair', 'Konrad Adenauer'],
     },
     {
      "id": 1_008_297,
@@ -3827,7 +3827,7 @@ OCCURRENCES: list[dict] = [
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT6675580126.mp3?updated=1777394990',
      "resource_episodes": [{'title': '106. Watergate: Part 1', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT6675580126.mp3?updated=1777394990', 'date': '2021-10-11'}, {'title': '107. Watergate: Part 2', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT9677344742.mp3?updated=1777395036', 'date': '2021-10-12'}],
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Watergate scandal', 'Henry Kissinger', 'Apollo 11 moon landing', 'Mao Zedong', 'Assassination of Martin Luther King Jr.', 'Martin Luther King Jr.', 'Assassination of Robert F. Kennedy', 'Leonid Brezhnev', 'Yom Kippur War', 'John F. Kennedy', 'Bay of Pigs invasion'],
+     "tags": ['Watergate scandal', 'Henry Kissinger', 'Apollo 11 moon landing', 'Mao Zedong', 'Assassination of Martin Luther King Jr.', 'Martin Luther King Jr.', 'Assassination of Robert F. Kennedy', 'Leonid Brezhnev', 'Yom Kippur War', 'John F. Kennedy', 'Bay of Pigs invasion', 'Richard Nixon'],
     },
     {
      "id": 1_008_314,
