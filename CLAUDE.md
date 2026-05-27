@@ -128,6 +128,8 @@ Resource-type occurrences are content **about** history rather than history itse
 - `priorities` MUST only reference resource-timeline slugs (the ones with `is_resource_timeline: True` in `import_v2.py`). The validator + DB trigger reject cross-pollination.
 - `tags: ["Subject Title One", "Subject Title Two", ...]` — list of regular occurrences this resource covers. Resolved by case-insensitive title match. Bidirectional — the regular subject's popup will offer this resource back. **When adding a new regular occurrence, also check whether any existing resource covers it and add a tag.**
 - Resources never tag other resources directly — they connect only via shared subjects.
+- **Tag-list inflation is OK.** Be generous with declared tags; the importer (`_select_top_resources_per_subject` in `import_v2.py`) prunes to the top 2 podcasts + 2 books per subject at write-time. Authorial `tags: [...]` lists are the canonical "this resource covers these subjects" assertion; the resource_tags table is the curated UI surface derived from them. Scoring favours focused resources (fewer total tags), multi-episode bundles, and title-matched deep-dives.
+- **No need to add `resources-combined` manually.** The importer auto-injects a `resources-combined` priority on every resource-type occurrence (max of source-timeline priorities + per-subtype bias). Combined-timeline ranking: book-nonfiction +5k, book-fiction -2k, podcasts baseline.
 
 **Resource subtypes (`resource_subtype` column, migration 013):**
 

@@ -122,13 +122,27 @@ override's `title` field so both runs produce identical resource_titles.
 these don't have a `Part N` suffix and become standalone occurrences. That's
 correct — they're not really a series.
 
-**When the user adds a NEW podcast** they want monitored, ask them to:
+**When the user adds a NEW podcast / book series / documentary** they want
+monitored, walk them through:
+
 1. Drop a new module under `tools/v2/data/_research/` with a parser +
    fetcher + curator + generator following the TRIH pattern.
-2. Add a new entry to `EPISODIC_RESOURCES` in `monthly_update.py`
-   pointing at those scripts. Include the id range (reserve a fresh
-   1_010_xxx block).
-3. Run the monthly script — the new entry will be picked up next time.
+2. Reserve a fresh id range (next free 1_0XX_000–1_0XX_999 block) and
+   register a NEW resource timeline slug in `import_v2.py::TIMELINES`,
+   e.g.:
+   ```python
+   {"slug": "empire-podcast",   "name": "Empire (podcast)", "display_order": 103, "is_featured": False, "is_resource_timeline": True},
+   ```
+3. **You do NOT need to add `resources-combined` to each resource's
+   `priorities` dict** — the importer auto-populates it for every
+   resource-type occurrence (see the `if o.get("type") == "resource":`
+   block in `import_v2.py::main`). The combined-timeline priority is
+   derived from the max of the source-timeline priorities + a small
+   per-subtype bias (book-nonfiction +5k, book-fiction -2k) so similarly-
+   dated resources order sensibly in the combined view.
+4. Add a new entry to `EPISODIC_RESOURCES` in `monthly_update.py`
+   pointing at the new pipeline.
+5. Run the monthly script — the new entry will be picked up next time.
 
 #### 2b. `is_ongoing` entries
 
@@ -181,6 +195,32 @@ Person rows missing end_year despite being born >110 years ago. Always a
 data-quality gap, never genuinely still living. Look up the death year
 on Wikipedia and add it. These don't need user judgement — just fix them
 and tell the user what you did.
+
+### 2e. Re-score the resource-tag cross-links
+
+Every time you re-import resources OR add new subject occurrences, the
+top-N-per-subject selection (see `_select_top_resources_per_subject` in
+`import_v2.py`) runs automatically — capping each subject at 2 podcasts
++ 2 books so the EventPopup's "📚 Resources covering this subject" list
+stays focused on the most relevant cross-links.
+
+You don't need to do anything special here — the importer does it. But
+remember:
+
+- **New subjects added → existing resources may now tag them.** Run the
+  existing suggester after appending new subjects:
+  ```
+  cd tools && .venv/Scripts/python.exe -m v2.curation.suggest_resource_tags --since <new_id>
+  ```
+  Add the suggestions to the relevant resource modules' `tags` lists,
+  then re-import. The top-N selection will automatically include the
+  best new cross-links.
+
+- **New resources added → existing subjects may now have a new top-N
+  candidate.** The selection re-runs across ALL resources on every
+  import, so a fresh batch of TRIH episodes may displace a weaker
+  resource from a subject's top-2 podcasts list. No manual step needed —
+  it's all in the algorithm.
 
 ### 3. Editorial additions
 

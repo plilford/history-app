@@ -65,6 +65,7 @@ TIMELINES = [
     {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False, "is_resource_timeline": False},
     {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False, "is_resource_timeline": False},
     {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "roman-emperors",    "name": "Rome: Emperors",        "display_order": 17, "is_featured": True,  "is_resource_timeline": False},
     {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False, "is_resource_timeline": False},
     {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False, "is_resource_timeline": False},
     {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False, "is_resource_timeline": False},
@@ -76,6 +77,11 @@ TIMELINES = [
     {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False, "is_resource_timeline": False},
     {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False, "is_resource_timeline": False},
     # ----- Resource timelines (occurrence_type='resource' only) --------------
+    # `resources-combined` is the union view — every resource regardless of
+    # source carries a priority here so users can see one feed of all
+    # podcasts + books interleaved by date. Per-source resource timelines
+    # below let users drill into a single source.
+    {"slug": "resources-combined",          "name": "Resources: Combined",           "display_order": 99,  "is_featured": True,  "is_resource_timeline": True},
     {"slug": "the-rest-is-history-podcast", "name": "The Rest Is History (podcast)", "display_order": 100, "is_featured": False, "is_resource_timeline": True},
     {"slug": "popular-history-books",       "name": "Popular history books",         "display_order": 101, "is_featured": False, "is_resource_timeline": True},
 ]
@@ -104,6 +110,98 @@ def _optional_module(name: str):
 def chunked(seq, n):
     for i in range(0, len(seq), n):
         yield seq[i:i + n]
+
+
+# Map a resource_subtype to its "family" — the bucket we cap on. Books of
+# any flavour share a cap; podcasts share a cap. Documentaries / museum
+# artifacts are their own families (currently empty buckets, future-proof).
+_SUBTYPE_FAMILY: dict[str | None, str] = {
+    "podcast-episode": "podcast",
+    "book-nonfiction": "book",
+    "book-fiction":    "book",
+    "documentary":     "documentary",
+    "museum-artifact": "artifact",
+}
+# Max number of resources to associate with any single subject, per family.
+# Two podcasts + two books + one of each rarer flavour is enough to anchor
+# the "Resources covering this subject" popup without drowning the user.
+_PER_FAMILY_CAP = 2
+
+
+def _select_top_resources_per_subject(
+    pending_tags: list[tuple[int, str]],
+    title_to_id: dict[str, int],
+    occurrences: list[dict],
+) -> list[dict]:
+    """Pick the top N resources per (subject, family) bucket, return the
+    rows to insert into the `resource_tags` table.
+
+    Inputs:
+      pending_tags  — every (resource_id, subject_title) pair declared by
+                      the resource modules' authorial `tags` lists.
+      title_to_id   — normalised-title → occurrence_id lookup (built in main).
+      occurrences   — every occurrence dict (so we can read resource
+                      metadata: priorities, subtype, tag count, episode count).
+    """
+    from collections import defaultdict
+
+    by_id = {o["id"]: o for o in occurrences}
+
+    # Pre-compute "how many tags does each resource carry" — focused
+    # resources outrank broad surveys.
+    tags_per_resource: dict[int, int] = defaultdict(int)
+    for rid, _ in pending_tags:
+        tags_per_resource[rid] += 1
+
+    def score(rid: int, subject_title: str) -> int:
+        r = by_id.get(rid)
+        if r is None:
+            return 0
+        pris = (r.get("priorities") or {}).values()
+        base = max((int(p) for p in pris), default=0)
+        # Specificity: -1k per tag the resource carries (so a 2-tag resource
+        # scores +6k higher than an 8-tag one).
+        spec = -tags_per_resource[rid] * 1_000
+        # Episode-count bonus: a 4-episode series outranks a single episode.
+        ep_bonus = min((len(r.get("resource_episodes") or []) or 1) * 1_000, 10_000)
+        # Title-match: if the subject's title appears in the resource title,
+        # this is a "deep-dive" resource for that subject specifically.
+        rt = (r.get("title") or "").lower()
+        st_norm = subject_title.strip().lower()
+        title_match = 5_000 if st_norm and st_norm in rt else 0
+        # Subtype bias matches the resources-combined formula.
+        subtype_bias = {
+            "book-nonfiction":  5_000,
+            "book-fiction":    -2_000,
+        }.get(r.get("subtype") or "", 0)
+        return base + spec + ep_bonus + title_match + subtype_bias
+
+    # subject_id → family → [(resource_id, score)]
+    candidates: dict[int, dict[str, list[tuple[int, int]]]] = defaultdict(
+        lambda: defaultdict(list),
+    )
+    for rid, st in pending_tags:
+        sid = title_to_id.get(st.strip().lower())
+        if sid is None or sid == rid:
+            continue
+        r = by_id.get(rid)
+        if r is None:
+            continue
+        family = _SUBTYPE_FAMILY.get(r.get("subtype"), "other")
+        candidates[sid][family].append((rid, score(rid, st)))
+
+    # Pick top N per family.
+    selected_pairs: set[tuple[int, int]] = set()   # (resource_id, subject_id)
+    for sid, by_family in candidates.items():
+        for family, items in by_family.items():
+            items.sort(key=lambda x: -x[1])
+            for rid, _ in items[:_PER_FAMILY_CAP]:
+                selected_pairs.add((rid, sid))
+
+    return [
+        {"resource_id": rid, "subject_id": sid}
+        for (rid, sid) in sorted(selected_pairs)
+    ]
 
 
 def year_str(y: int | None) -> str:
@@ -300,6 +398,32 @@ def main():
                 "priority":      int(prio),
             })
 
+        # Auto-populate `resources-combined` for every resource-type entry.
+        # The combined timeline is the union view of every podcast / book /
+        # documentary, so each resource needs a priority row regardless of
+        # which per-source timeline carries it natively.
+        # Priority = max of the source-timeline priorities + a per-subtype
+        # bias (non-fiction books get a small boost over podcast eps, fiction
+        # gets a small de-boost) to break ties on similar-dated entries:
+        #   book-nonfiction: +5000
+        #   podcast-episode: 0 (baseline)
+        #   book-fiction:    -2000
+        #   documentary, museum-artifact, null: 0
+        if o.get("type") == "resource":
+            combined_id = slug_to_id.get("resources-combined")
+            if combined_id is not None:
+                source_pris = [int(p) for p in (o.get("priorities") or {}).values()]
+                base = max(source_pris) if source_pris else 900_000
+                subtype_bias = {
+                    "book-nonfiction":  5_000,
+                    "book-fiction":    -2_000,
+                }.get(o.get("subtype") or "", 0)
+                priorities_payload.append({
+                    "occurrence_id": eid,
+                    "timeline_id":   combined_id,
+                    "priority":      max(0, min(1_000_000, base + subtype_bias)),
+                })
+
     # 3. Upsert occurrences. Chunk small enough to survive flaky connections —
     #    the resource_episodes JSONB column inflates per-row size and large
     #    batches occasionally trip the HTTP/2 stream limit.
@@ -324,21 +448,28 @@ def main():
     print("Rebuilding zoom_out FK ids ...")
     sb.rpc("rebuild_zoom_out_ids").execute()
 
-    # 6. Resource tags: resolve subject titles → ids, replace the rows for any
-    #    resource that re-imported. Tags pointing at an unknown title get a
-    #    warning and are skipped (typical cause: typo or the subject hasn't
-    #    been added yet).
-    tag_rows: list[dict] = []
-    unresolved: list[tuple[int, str]] = []
-    for resource_id, subject_title in pending_tags:
-        sid = title_to_id.get(subject_title.strip().lower())
-        if sid is None:
-            unresolved.append((resource_id, subject_title))
-            continue
-        if sid == resource_id:
-            print(f"  WARNING: resource {resource_id} tags itself ({subject_title!r}); skipping")
-            continue
-        tag_rows.append({"resource_id": resource_id, "subject_id": sid})
+    # 6. Resource tags: resolve subject titles → ids, score each candidate
+    #    (resource, subject) pair, and KEEP ONLY the top 2 podcasts + top 2
+    #    books per subject. Authorial tag lists in the data modules remain
+    #    untouched — they're the canonical "this resource covers these
+    #    subjects" assertion — but the visible cross-link (the popup's 📚
+    #    list and the resource_tags table) only carries the cream so popular
+    #    subjects don't drown the user in tangentially-mentioned references.
+    #
+    # Scoring (higher = more relevant for THIS subject):
+    #   base                        = max(resource.priorities.values())
+    #   - (num_tags(resource) * 1k) → focused resources beat broad surveys
+    #   + (episode_count * 1k)      → multi-part deep-dives outrank singles
+    #   + 5k if subject title appears as substring of resource title
+    #   + 5k for book-nonfiction, -2k for book-fiction (matches the
+    #     resources-combined bias above)
+    tag_rows = _select_top_resources_per_subject(
+        pending_tags, title_to_id, occurrences,
+    )
+    unresolved = [
+        (rid, t) for rid, t in pending_tags
+        if title_to_id.get(t.strip().lower()) is None
+    ]
 
     if unresolved:
         print(f"  {len(unresolved)} unresolved resource tags (subject title not found):")

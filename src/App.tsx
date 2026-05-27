@@ -38,14 +38,41 @@ const HOVER_CLOSE_DELAY_MS = 200;
 
 type HoverHandler = (event: EventWithPriority, rect: DOMRect) => void;
 
-// Names of the three timeline columns shown on initial load. The user can
-// swap any of them via the column-header TimelinePicker; the rightmost slot
-// is also where SearchBar drops a freshly-picked timeline.
-const DEFAULT_TIMELINE_NAMES = [
+// Factory-default timeline columns shown on a fresh install or after the
+// user explicitly resets their layout. Once the app loads we persist
+// whatever set of columns the user has open to localStorage and restore
+// from there on subsequent loads, so the "default" they see really is
+// their last-used layout.
+const FACTORY_DEFAULT_TIMELINE_NAMES = [
   "Master",
+  "Resources: Combined",
   "Arts and Thoughts",
-  "England: Monarchs",
 ];
+const TIMELINE_NAMES_LS_KEY = "timelineNames";
+// Kept for places that still want the COUNT of starting columns (the
+// responsive-layout hook reads this for its column-budget calculations).
+const DEFAULT_TIMELINE_NAMES = FACTORY_DEFAULT_TIMELINE_NAMES;
+
+/** Restore the user's last-used column layout, falling back to the factory
+ *  default. Validates that the stored value is an array of strings — a
+ *  corrupted localStorage entry won't crash the app. */
+function loadInitialTimelineNames(): string[] {
+  try {
+    const raw = localStorage.getItem(TIMELINE_NAMES_LS_KEY);
+    if (!raw) return FACTORY_DEFAULT_TIMELINE_NAMES;
+    const parsed = JSON.parse(raw);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every((s) => typeof s === "string")
+    ) {
+      return parsed as string[];
+    }
+  } catch {
+    // fall through
+  }
+  return FACTORY_DEFAULT_TIMELINE_NAMES;
+}
 
 // Fallback range used until the auto-fetched min/max returns from the DB.
 const FALLBACK_YEAR_MIN = -10_000;
@@ -247,8 +274,17 @@ function AppInner() {
   // Names of the columns to render, in display order. Search may replace the
   // rightmost slot so that a found occurrence lands in a visible timeline.
   const [timelineNames, setTimelineNames] = useState<string[]>(
-    () => DEFAULT_TIMELINE_NAMES,
+    () => loadInitialTimelineNames(),
   );
+  // Persist the layout on every change. Refresh restores it; "Reset to
+  // default" in the settings menu nukes the key.
+  useEffect(() => {
+    try {
+      localStorage.setItem(TIMELINE_NAMES_LS_KEY, JSON.stringify(timelineNames));
+    } catch {
+      // localStorage full / disabled — non-fatal, just lose the persistence.
+    }
+  }, [timelineNames]);
   // Forward-declared so useResponsiveLayout can observe its width. The actual
   // ref attachment happens on <main> further down. Refs are stable across
   // renders, so we can pass it into a hook before the element exists; the
@@ -830,9 +866,26 @@ function AppInner() {
         naturalLevel === 2 ? Math.max(800, span * 1.5) :
         naturalLevel === 1 ? Math.max(80, span * 4) :
         40;
+      // Age-based floor with a tiered scale. The rate at which we widen the
+      // window grows with how far back the event is — recent events are
+      // surrounded by lots of nearby content (don't need much context), but
+      // deep-time events (millions of years old) have nothing within 1M
+      // years of them so a wider window is needed to anchor the eye.
+      //   age < 100yr        →   40yr floor   (modern era)
+      //   age < 2_000yr      →   5%  of age   (medieval / classical)
+      //   age < 100_000yr    →  10%  of age   (prehistoric humans)
+      //   age < 10_000_000yr →  20%  of age   (paleolithic / early hominids)
+      //   else               →  30%  of age   (deep geological time)
+      // For Permian-Triassic at -252M this lands at ~75M-yr window, matching
+      // the "around 70M years" target the user calibrated by hand.
       const currentYear = new Date().getFullYear();
       const ageYears = Math.max(0, currentYear - target);
-      const ageBasedFloor = Math.max(40, ageYears * 0.05);
+      let ageBasedFloor: number;
+      if (ageYears < 100) ageBasedFloor = 40;
+      else if (ageYears < 2_000) ageBasedFloor = Math.max(40, ageYears * 0.05);
+      else if (ageYears < 100_000) ageBasedFloor = Math.max(40, ageYears * 0.10);
+      else if (ageYears < 10_000_000) ageBasedFloor = Math.max(40, ageYears * 0.20);
+      else ageBasedFloor = Math.max(40, ageYears * 0.30);
       const targetVisibleSpan = Math.max(typeBasedSpan, ageBasedFloor);
       const viewportH = Math.max(1, main.clientHeight - HEADER_HEIGHT_PX);
       // Convert desired local-ppy at the target year back to the linear-band
@@ -1305,6 +1358,24 @@ function AppInner() {
     </button>
   );
 
+  // Reset-layout: nukes the persisted timelineNames so the next render
+  // falls back to the factory default. Useful when the user has wandered
+  // into an odd column setup and wants a clean slate.
+  const resetLayoutButton = (
+    <button
+      onClick={() => {
+        try { localStorage.removeItem(TIMELINE_NAMES_LS_KEY); } catch {}
+        setTimelineNames(FACTORY_DEFAULT_TIMELINE_NAMES);
+        setMobileMenuOpen(false);
+      }}
+      title={`Reset to factory default columns: ${FACTORY_DEFAULT_TIMELINE_NAMES.join(" · ")}`}
+      className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1.5"
+    >
+      <span aria-hidden>↺</span>
+      <span>Reset layout</span>
+    </button>
+  );
+
   const regionPanel = (
     <div className="flex flex-wrap items-center gap-3 text-xs">
       <span className="text-slate-400 w-full md:w-auto">
@@ -1394,6 +1465,7 @@ function AppInner() {
           {lifespansToggle}
           {regionsToggle}
           {themeToggle}
+          {resetLayoutButton}
         </div>
 
         {/* Editor-only DB freshness reminder. Returns null for everyone
@@ -1457,6 +1529,7 @@ function AppInner() {
               {lifespansToggle}
               {regionsToggle}
               {themeToggle}
+              {resetLayoutButton}
               <button
                 onClick={zoomReset}
                 title="Reset zoom"
@@ -1713,7 +1786,11 @@ function YearAxis({
   width: number;
 }) {
   // Year-mode ticks across the whole timeline (cheap to recompute, scale-keyed).
-  const yearTicks = useMemo(() => generateLogTicks(scale, 80, 500), [scale]);
+  // maxTicks raised from 500 → 3000 so deep-time ticks (millions and billions
+  // of years ago) still appear when the user is zoomed into the dense linear
+  // band — the previous 500 cap was hitting in the early log band and leaving
+  // the deep-time gutter unmarked.
+  const yearTicks = useMemo(() => generateLogTicks(scale, 80, 3000), [scale]);
 
   // Sub-year ticks only become visible inside a window around the viewport.
   // Compute the visible year-span and switch granularity at < 2 yr (months)
