@@ -109,6 +109,18 @@ export interface OccurrenceWithPriority extends Occurrence {
   priority: number;
 }
 
+/** Minimal projection of an on-screen occurrence sent to the /api/summary
+ *  endpoint. Kept tiny so the request body stays a few KB even with a dense
+ *  view. */
+export interface CompactOccurrence {
+  id: number;
+  title: string;
+  startYear: number | null;
+  endYear: number | null;
+  type: Occurrence["occurrence_type"];
+  priority: number;
+}
+
 export interface UserFavourite {
   user_id: string;
   occurrence_id: number;

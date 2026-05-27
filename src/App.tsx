@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
-import type { Timeline, EventWithPriority, HistoryEvent } from "./types/database";
+import type { Timeline, EventWithPriority, HistoryEvent, CompactOccurrence } from "./types/database";
 import { EventPopup } from "./components/EventPopup";
 import { SearchBar } from "./components/SearchBar";
 import { TimelinePicker } from "./components/TimelinePicker";
@@ -9,6 +9,7 @@ import { SuggestionsPopup } from "./components/SuggestionsPopup";
 import { ChildrenPopup } from "./components/ChildrenPopup";
 import { ResourcesPopup } from "./components/ResourcesPopup";
 import { DataFreshnessChip } from "./components/DataFreshnessChip";
+import { SummaryPanel } from "./components/SummaryPanel";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
 import { ThemeProvider, useTheme } from "./lib/theme";
@@ -52,6 +53,51 @@ const TIMELINE_NAMES_LS_KEY = "timelineNames";
 // Kept for places that still want the COUNT of starting columns (the
 // responsive-layout hook reads this for its column-budget calculations).
 const DEFAULT_TIMELINE_NAMES = FACTORY_DEFAULT_TIMELINE_NAMES;
+
+// ---- AI summary feature ----------------------------------------------------
+// Editor-only for now: the "Summarise the visible period" panel is shown only
+// to this signed-in email. The serverless /api/summary endpoint enforces the
+// same allowlist server-side (see functions/api/summary.ts) — this constant
+// just decides whether the UI renders at all. Widening later = relaxing both.
+const EDITOR_EMAIL = "p.lilford@gmail.com";
+// Auto-summarise toggle (regenerate as the view settles). Persisted; default
+// OFF so the feature never spends money unless explicitly turned on.
+const AUTO_SUMMARISE_LS_KEY = "autoSummarise";
+// Safety cap on auto-mode calls within a single browsing session. A UX guard
+// against runaway spend, not the authoritative ceiling — that's the Anthropic
+// Console monthly budget. Bump this (one-line edit + redeploy) if it's ever
+// too tight in practice.
+const AUTO_SUMMARISE_SESSION_CAP = 30;
+// Debounce after the view stops changing before auto-mode regenerates.
+const AUTO_SUMMARISE_SETTLE_MS = 1200;
+// Below this container width the summary becomes a full overlay instead of a
+// side panel, so the three timeline columns never get squeezed below a
+// readable width by the panel.
+const SUMMARY_SIDE_PANEL_MIN_PX = 1100;
+const SUMMARY_PANEL_WIDTH_PX = 360;       // default dock width
+const SUMMARY_PANEL_MIN_PX = 280;
+const SUMMARY_PANEL_ABS_MAX_PX = 2000;    // sanity ceiling; real max is dynamic
+// Comfortable minimum column width while the panel is docked. Larger than the
+// global COLUMN_MIN_WIDTH_PX so widening the panel DROPS columns (keeping the
+// rest readable) instead of shrinking all of them indefinitely.
+const SUMMARY_DOCK_MIN_COL_PX = 240;
+const SUMMARY_PANEL_WIDTH_LS_KEY = "summaryPanelWidth";
+
+function loadSummaryPanelWidth(): number {
+  try {
+    const v = Number(localStorage.getItem(SUMMARY_PANEL_WIDTH_LS_KEY));
+    if (Number.isFinite(v) && v >= SUMMARY_PANEL_MIN_PX && v <= SUMMARY_PANEL_ABS_MAX_PX) return v;
+  } catch { /* ignore */ }
+  return SUMMARY_PANEL_WIDTH_PX;
+}
+
+function loadInitialAutoSummarise(): boolean {
+  try {
+    return localStorage.getItem(AUTO_SUMMARISE_LS_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 /** Restore the user's last-used column layout, falling back to the factory
  *  default. Validates that the stored value is an array of strings — a
@@ -109,6 +155,9 @@ const MOBILE_BREAKPOINT_PX = 768;
 function useResponsiveLayout(
   containerRef: React.RefObject<HTMLElement>,
   desktopColumns: number,
+  // Narrowest a column may get before one is dropped. Larger while the summary
+  // panel is docked, so columns drop (and stay readable) rather than shrinking.
+  minColWidth: number = COLUMN_MIN_WIDTH_PX,
 ) {
   const [containerWidth, setContainerWidth] = useState<number>(() =>
     typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -143,7 +192,7 @@ function useResponsiveLayout(
   // viewports — better than blanking the timeline entirely).
   const visibleColumnCount = Math.max(
     1,
-    Math.min(desktopColumns, Math.floor(available / COLUMN_MIN_WIDTH_PX)),
+    Math.min(desktopColumns, Math.floor(available / minColWidth)),
   );
   // Divide remaining width evenly so no horizontal overflow is ever possible.
   const columnWidth = Math.floor(available / visibleColumnCount);
@@ -232,7 +281,11 @@ export default function App() {
 }
 
 function AppInner() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
+  // Editor-only gate for the AI summary feature. Conditional render, not a
+  // disabled state — non-editors get no summary UI at all. Case-insensitive to
+  // match the server-side check in functions/api/summary.ts.
+  const isEditor = (user?.email ?? "").toLowerCase() === EDITOR_EMAIL.toLowerCase();
   const { ids: favouriteIds, isFavourite } = useFavourites();
   const { theme, toggle: toggleTheme } = useTheme();
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -286,15 +339,61 @@ function AppInner() {
     }
   }, [timelineNames]);
   // Forward-declared so useResponsiveLayout can observe its width. The actual
-  // ref attachment happens on <main> further down. Refs are stable across
-  // renders, so we can pass it into a hook before the element exists; the
-  // hook tolerates ref.current being null on the first render.
+  // ref attachment happens on <main> further down.
   const mainRef = useRef<HTMLElement>(null);
-  // Responsive layout: on phones we render fewer columns (2 vs 3) and resize
-  // each to fit. The clipped timelines stay in state — rotating to landscape
-  // brings them back.
+
+  // Width of the OUTER content row (timeline + panel together). Unlike the
+  // <main> width — which SHRINKS as the panel widens — this is stable
+  // regardless of whether the panel is docked, so it's the correct basis for
+  // the side-vs-overlay breakpoint AND for how wide the panel may grow.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [outerWidth, setOuterWidth] = useState<number>(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    setOuterWidth(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") {
+      const onResize = () => setOuterWidth(el.clientWidth);
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === "number" && w > 0) setOuterWidth(Math.floor(w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Summary panel open state — declared early so the column layout below can
+  // react to it. Only ever true for the editor.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  // Side panel vs full overlay — based on the stable OUTER width, never the
+  // <main> width (which would oscillate at the threshold).
+  const isPanelOverlay = outerWidth < SUMMARY_SIDE_PANEL_MIN_PX;
+  // While the panel is docked beside the timeline, drop columns sooner (use a
+  // larger comfortable min width) so the remaining columns stay readable.
+  const panelDocked = summaryOpen && isEditor && !isPanelOverlay;
+
+  // Responsive layout: how many timeline columns fit + their width. Measures
+  // the <main> area (already excludes the docked panel). The min-column-width
+  // is larger while the panel is docked so columns drop instead of cramping.
   const { isMobile, visibleColumnCount, columnWidth, axisWidth } =
-    useResponsiveLayout(mainRef, DEFAULT_TIMELINE_NAMES.length);
+    useResponsiveLayout(
+      mainRef,
+      DEFAULT_TIMELINE_NAMES.length,
+      panelDocked ? SUMMARY_DOCK_MIN_COL_PX : COLUMN_MIN_WIDTH_PX,
+    );
+
+  // How wide the panel may be dragged: leave room for the axis + at least one
+  // min-width column (so the timeline never fully disappears), but wide enough
+  // that columns genuinely drop on big screens.
+  const summaryPanelMax = Math.max(
+    SUMMARY_PANEL_MIN_PX,
+    Math.min(SUMMARY_PANEL_ABS_MAX_PX, outerWidth - axisWidth - COLUMN_MIN_WIDTH_PX),
+  );
 
   // Mobile-only: hamburger menu is open. On desktop, settings sit inline in
   // the header so this is always false there.
@@ -769,6 +868,105 @@ function AppInner() {
     });
     return set;
   }, [orderedTimelines, columnIds]);
+
+  // ---- AI summary panel ----------------------------------------------------
+  // NOTE: summaryOpen / isPanelOverlay / panelDocked are declared up near the
+  // layout hook (the column layout depends on them).
+  // Auto-regenerate as the view settles (persisted; default OFF).
+  const [autoSummarise, setAutoSummarise] = useState<boolean>(loadInitialAutoSummarise);
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTO_SUMMARISE_LS_KEY, String(autoSummarise));
+    } catch { /* non-fatal */ }
+  }, [autoSummarise]);
+  // Bumped by the "Summarise" / "Regenerate" buttons to force a (re)generation
+  // for the current view, bypassing the cache.
+  const [summaryTrigger, setSummaryTrigger] = useState(0);
+  // Draggable dock width (persisted). The drag handle lives on the panel's left
+  // edge; dragging left widens it. Columns recompute via the <main>
+  // ResizeObserver as this changes.
+  const [summaryPanelWidth, setSummaryPanelWidth] = useState<number>(loadSummaryPanelWidth);
+  useEffect(() => {
+    try { localStorage.setItem(SUMMARY_PANEL_WIDTH_LS_KEY, String(summaryPanelWidth)); }
+    catch { /* non-fatal */ }
+  }, [summaryPanelWidth]);
+  const summaryResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const startSummaryResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // Start from the actually-rendered (clamped) width.
+    summaryResizeRef.current = {
+      startX: e.clientX,
+      startWidth: Math.min(summaryPanelWidth, summaryPanelMax),
+    };
+  };
+  const moveSummaryResize = (e: React.PointerEvent) => {
+    const st = summaryResizeRef.current;
+    if (!st) return;
+    const delta = st.startX - e.clientX; // drag toward the timeline = wider
+    const next = Math.min(summaryPanelMax, Math.max(SUMMARY_PANEL_MIN_PX, st.startWidth + delta));
+    setSummaryPanelWidth(next);
+  };
+  const endSummaryResize = (e: React.PointerEvent) => {
+    if (!summaryResizeRef.current) return;
+    summaryResizeRef.current = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+
+  // Each visible column reports the compact projection of what it's actually
+  // rendering (after rollup/region/lifespan/collision). We aggregate the union
+  // here so the panel can summarise exactly what's on screen. Mirrors the
+  // columnIds dedup pattern: only fires when a column's id-set changes, and
+  // only while the panel is open (reportVisible), so the scroll hot path is
+  // untouched when the feature is closed.
+  const [visibleByColumn, setVisibleByColumn] = useState<Record<number, CompactOccurrence[]>>({});
+  const handleColumnVisibleChange = useCallback(
+    (columnIndex: number, items: CompactOccurrence[]) => {
+      setVisibleByColumn((prev) => ({ ...prev, [columnIndex]: items }));
+    },
+    [],
+  );
+  const visibleUnion = useMemo(() => {
+    const seen = new Set<number>();
+    const out: CompactOccurrence[] = [];
+    // Only consider columns that are currently rendered.
+    for (let idx = 0; idx < orderedTimelines.length; idx++) {
+      const items = visibleByColumn[idx];
+      if (!items) continue;
+      for (const it of items) {
+        if (seen.has(it.id)) continue;
+        seen.add(it.id);
+        out.push(it);
+      }
+    }
+    return out;
+  }, [visibleByColumn, orderedTimelines]);
+
+  // The shared visible year-window, derived from the scroll viewport + scale
+  // (same math the columns use internally). null until the viewport is sized.
+  const visibleWindow = useMemo(() => {
+    if (viewport.clientHeight <= 0) return null;
+    const yA = scale.pxToYear(viewport.scrollTop - HEADER_HEIGHT_PX);
+    const yB = scale.pxToYear(
+      viewport.scrollTop + viewport.clientHeight - HEADER_HEIGHT_PX,
+    );
+    return { startYear: Math.min(yA, yB), endYear: Math.max(yA, yB) };
+  }, [scale, viewport]);
+
+  const summaryTimelines = useMemo(
+    () => orderedTimelines.map((t) => ({ slug: t.slug, name: t.name })),
+    [orderedTimelines],
+  );
+  const summaryRegionWeighted = useMemo(
+    () => orderedTimelines.some((t) => REGION_WEIGHTED_SLUGS.has(t.slug)),
+    [orderedTimelines],
+  );
+  // Header button: opens the panel when closed; regenerates the current view
+  // when already open. Closing is via the panel's × (or overlay backdrop).
+  const handleSummariseClick = () => {
+    if (summaryOpen) setSummaryTrigger((n) => n + 1);
+    else setSummaryOpen(true);
+  };
 
   // ---- Programmatic scroll: centre the viewport on a given year -----------
   function scrollToYear(year: number) {
@@ -1439,6 +1637,55 @@ function AppInner() {
     </div>
   );
 
+  // Editor-only summary controls (Summarise/Regenerate + Auto toggle), shared
+  // between the desktop header cluster and the mobile hamburger menu.
+  const summaryControls = isEditor ? (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={handleSummariseClick}
+        title="AI summary of the visible period"
+        className={`px-2 py-1 rounded border ${
+          summaryOpen
+            ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+            : "border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+        }`}
+      >
+        {summaryOpen ? "↻ Summary" : "Summarise"}
+      </button>
+      <label
+        className="flex items-center gap-1 cursor-pointer text-slate-600 dark:text-slate-400"
+        title="Auto-regenerate as you pan/zoom (uses more API credits)"
+      >
+        <input
+          type="checkbox"
+          checked={autoSummarise}
+          onChange={(e) => setAutoSummarise(e.target.checked)}
+          className="accent-blue-600"
+        />
+        Auto
+      </label>
+    </div>
+  ) : null;
+
+  // The panel element itself, rendered into either the side <aside> or the
+  // full overlay depending on width. Only ever built for the editor.
+  const summaryPanel = summaryOpen && isEditor ? (
+    <SummaryPanel
+      window={visibleWindow}
+      timelines={summaryTimelines}
+      showing={visibleUnion}
+      viewState={{ showLifespans, regionWeighted: summaryRegionWeighted }}
+      accessToken={session?.access_token ?? null}
+      autoMode={autoSummarise}
+      generationTrigger={summaryTrigger}
+      isOverlay={isPanelOverlay}
+      onClose={() => setSummaryOpen(false)}
+      settleMs={AUTO_SUMMARISE_SETTLE_MS}
+      sessionCap={AUTO_SUMMARISE_SESSION_CAP}
+    />
+  ) : null;
+
   return (
     <div className="h-full flex flex-col">
       <header className="sticky top-0 z-40 flex-shrink-0 px-3 md:px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 md:gap-3">
@@ -1460,6 +1707,7 @@ function AppInner() {
 
         {/* Desktop-only inline settings. Hidden via md:flex on phones. */}
         <div className="hidden md:flex items-center gap-3 text-xs">
+          {summaryControls}
           {densityControl}
           {dateModeControl}
           {lifespansToggle}
@@ -1523,6 +1771,7 @@ function AppInner() {
           className="md:hidden sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
         >
           <div className="flex flex-col gap-3 text-xs">
+            {summaryControls}
             {densityControl}
             {dateModeControl}
             <div className="flex items-center gap-2 flex-wrap">
@@ -1578,60 +1827,100 @@ function AppInner() {
         </div>
       )}
 
-      <main
-        ref={mainRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden"
-        // touch-action: pan-y allows finger drag to scroll vertically through
-        // years; the gesture handlers below intercept 2-finger touches for
-        // pinch zoom. overflow-x-hidden enforces the "single page view, no
-        // horizontal scroll" mobile constraint — the column-count formula
-        // already guarantees no overflow, this just defends against bugs.
-        style={{ touchAction: "pan-y" }}
-      >
-        <div className="flex items-start">
-          <YearAxis
-            scale={scale}
-            viewportScrollTop={viewport.scrollTop}
-            viewportClientHeight={viewport.clientHeight}
-            width={axisWidth}
-          />
-          {orderedTimelines.map((t, idx) => (
-            <TimelineColumn
-              key={t.id}
-              timeline={t}
-              columnIndex={idx}
-              columnWidth={columnWidth}
+      <div ref={outerRef} className="flex-1 flex min-h-0">
+        <main
+          ref={mainRef}
+          className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden"
+          // touch-action: pan-y allows finger drag to scroll vertically through
+          // years; the gesture handlers below intercept 2-finger touches for
+          // pinch zoom. overflow-x-hidden enforces the "single page view, no
+          // horizontal scroll" mobile constraint — the column-count formula
+          // already guarantees no overflow, this just defends against bugs.
+          style={{ touchAction: "pan-y" }}
+        >
+          <div className="flex items-start">
+            <YearAxis
               scale={scale}
               viewportScrollTop={viewport.scrollTop}
               viewportClientHeight={viewport.clientHeight}
-              boxHeightPx={eventBoxHeightPx}
-              regionFilter={regionFilter}
-              dateDisplayMode={dateDisplayMode}
-              showLifespans={showLifespans}
-              onBoxEnter={handleBoxEnter}
-              onBoxLeave={handleBoxLeave}
-              onHeaderClick={handleHeaderClick}
-              swapStamp={
-                swapTarget && swapTarget.columnIndex === idx
-                  ? swapTarget.stamp
-                  : null
-              }
-              onAutoCenter={handleAutoCenter}
-              flash={flash}
-              onEventsLoaded={handleColumnEventsLoaded}
-              excludeIds={t.slug === "master" ? masterExcludeIds : null}
-              favouriteIds={favouriteIds}
-              isFavourite={isFavourite}
-              userId={user?.id ?? null}
-              umbrellaCounts={umbrellaCounts}
-              onShowChildren={(umbrella) => setUmbrellaForChildren({ umbrella })}
-              onShowParent={handleShowParent}
-              tagsByResource={tagsByResource}
-              subjectDates={subjectDates}
+              width={axisWidth}
             />
-          ))}
+            {orderedTimelines.map((t, idx) => (
+              <TimelineColumn
+                key={t.id}
+                timeline={t}
+                columnIndex={idx}
+                columnWidth={columnWidth}
+                scale={scale}
+                viewportScrollTop={viewport.scrollTop}
+                viewportClientHeight={viewport.clientHeight}
+                boxHeightPx={eventBoxHeightPx}
+                regionFilter={regionFilter}
+                dateDisplayMode={dateDisplayMode}
+                showLifespans={showLifespans}
+                onBoxEnter={handleBoxEnter}
+                onBoxLeave={handleBoxLeave}
+                onHeaderClick={handleHeaderClick}
+                swapStamp={
+                  swapTarget && swapTarget.columnIndex === idx
+                    ? swapTarget.stamp
+                    : null
+                }
+                onAutoCenter={handleAutoCenter}
+                flash={flash}
+                onEventsLoaded={handleColumnEventsLoaded}
+                onVisibleChange={handleColumnVisibleChange}
+                reportVisible={summaryOpen}
+                excludeIds={t.slug === "master" ? masterExcludeIds : null}
+                favouriteIds={favouriteIds}
+                isFavourite={isFavourite}
+                userId={user?.id ?? null}
+                umbrellaCounts={umbrellaCounts}
+                onShowChildren={(umbrella) => setUmbrellaForChildren({ umbrella })}
+                onShowParent={handleShowParent}
+                tagsByResource={tagsByResource}
+                subjectDates={subjectDates}
+              />
+            ))}
+          </div>
+        </main>
+
+        {/* Desktop / wide: dock the summary as a right-hand panel. The
+            ResizeObserver on <main> sees the narrower width and recomputes the
+            columns automatically — no column math changes needed. */}
+        {summaryPanel && !isPanelOverlay && (
+          <aside
+            className="relative flex-shrink-0 border-l border-slate-200 dark:border-slate-700 overflow-hidden"
+            style={{ width: Math.min(summaryPanelWidth, summaryPanelMax) }}
+          >
+            {/* Drag handle on the left edge — drag toward the timeline to widen. */}
+            <div
+              onPointerDown={startSummaryResize}
+              onPointerMove={moveSummaryResize}
+              onPointerUp={endSummaryResize}
+              onPointerCancel={endSummaryResize}
+              title="Drag to resize"
+              className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-blue-500/40 active:bg-blue-500/60"
+            />
+            {summaryPanel}
+          </aside>
+        )}
+      </div>
+
+      {/* Narrow / app: full overlay drawer (no column squeeze, no images). */}
+      {summaryPanel && isPanelOverlay && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40"
+          onClick={() => setSummaryOpen(false)}
+        >
+          <div
+            className="absolute inset-y-0 right-0 w-full max-w-md shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {summaryPanel}
+          </div>
         </div>
-      </main>
+      )}
 
       {hovered && (
         <EventPopup
@@ -2022,6 +2311,8 @@ function TimelineColumn({
   swapStamp, onAutoCenter,
   flash,
   onEventsLoaded,
+  onVisibleChange,
+  reportVisible,
   excludeIds,
   favouriteIds,
   isFavourite,
@@ -2056,6 +2347,14 @@ function TimelineColumn({
   /** Called whenever this column finishes loading events, with the loaded
    *  event IDs. Used by the parent to compute cross-column exclusions. */
   onEventsLoaded?: (columnIndex: number, ids: number[]) => void;
+  /** Called (while reportVisible) whenever the set of occurrences this column
+   *  actually renders changes — a compact projection used by the AI summary
+   *  panel. Signature-guarded so it only fires on genuine set changes. */
+  onVisibleChange?: (columnIndex: number, items: CompactOccurrence[]) => void;
+  /** Gate for onVisibleChange. True only while the summary panel is open, so
+   *  the reporting effect is a no-op (one boolean check) on the scroll hot
+   *  path when the feature is closed. */
+  reportVisible?: boolean;
   /** Event IDs to suppress from this column. Used for cross-timeline dedup
    *  (the master column hides events already shown in another visible
    *  column). null/undefined = no exclusion. */
@@ -2703,6 +3002,31 @@ function TimelineColumn({
     tagsByResource,
     subjectDates,
   ]);
+
+  // ----- Report what's on screen to the parent (AI summary panel) ----------
+  // Runs whenever `visible` changes (i.e. each scroll frame), but early-returns
+  // when the panel is closed, so it costs a single boolean check on the hot
+  // path. When open, it projects the placed boxes to a compact shape and only
+  // calls up when the id-set genuinely changed (signature guard) — mirrors the
+  // onEventsLoaded dedup pattern. onVisibleChange is a stable parent callback,
+  // intentionally omitted from deps.
+  const lastVisibleSigRef = useRef<string>("");
+  useEffect(() => {
+    if (!reportVisible || !onVisibleChange) return;
+    const sig = visible.map((p) => p.event.id).sort((a, b) => a - b).join(",");
+    if (sig === lastVisibleSigRef.current) return;
+    lastVisibleSigRef.current = sig;
+    const items: CompactOccurrence[] = visible.map((p) => ({
+      id: p.event.id,
+      title: p.event.title,
+      startYear: p.event.start_year,
+      endYear: p.event.end_year,
+      type: p.event.occurrence_type,
+      priority: p.event.priority ?? 0,
+    }));
+    onVisibleChange(columnIndex, items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, reportVisible, columnIndex]);
 
   // Granularity for date labels inside boxes. Based on the year-span currently
   // visible in the viewport — derived from the scale's inverse so that the

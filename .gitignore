@@ -5,6 +5,13 @@ tsconfig.tsbuildinfo
 .env.local
 *.local
 
+# Cloudflare Pages Functions local secrets (ANTHROPIC_API_KEY etc.)
+.dev.vars
+.wrangler/
+# Local-only wrangler config (prod build is configured via the CF dashboard;
+# local `npm run pages:dev` passes the needed flags explicitly).
+wrangler.toml
+
 # editor / OS
 .DS_Store
 .vscode/
