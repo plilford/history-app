@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "pages:dev": "npm run build && wrangler pages dev dist --compatibility-flags nodejs_compat"
+    "dev:worker": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

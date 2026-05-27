@@ -1,10 +1,11 @@
-# Copy this file to `.dev.vars` (git-ignored) for local `npm run pages:dev`.
-# These are the SERVER-SIDE secrets the /api/summary Cloudflare Pages Function
-# reads from `context.env` — they are NOT VITE_ vars and never reach the
-# browser bundle.
+# Copy this file to `.dev.vars` (git-ignored) for local `npm run dev:worker`.
+# These are the SERVER-SIDE values the /api/summary Worker reads from `env` —
+# they are NOT VITE_ vars and never reach the browser bundle.
 #
-# In production, set the same keys in the Cloudflare Pages dashboard:
-#   Settings -> Environment variables (Production + Preview).
+# In production set these on the WORKER (not a build/CI variable, which the
+# running Worker can't read): dashboard -> your Worker -> Settings ->
+# Variables and Secrets. ANTHROPIC_API_KEY must be a "Secret"; the SUPABASE_*
+# values can be plaintext "Variables".
 
 # Anthropic API key (console.anthropic.com). Billed usage-based, separate from
 # any Claude Max subscription. Set a monthly budget in the Console.
@@ -14,9 +15,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 # EDITOR_EMAIL the frontend gates on). Defaults to p.lilford@gmail.com if unset.
 EDITOR_EMAIL=p.lilford@gmail.com
 
-# Supabase project the function reads context/resources from (anon key — reads
-# are public under RLS). The function also accepts the VITE_ names as a
-# fallback, so if your Pages project already exposes those to Functions you can
-# omit these two.
+# Supabase project the Worker reads context/resources from + verifies the
+# login JWT against (anon/publishable key — reads are public under RLS). The
+# Worker also accepts the VITE_ names as a fallback.
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_ANON_KEY=your-publishable-anon-key

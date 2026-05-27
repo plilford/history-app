@@ -1,12 +1,13 @@
-// Cloudflare Pages Function — POST /api/summary
+// /api/summary handler — runs inside the Worker entrypoint (worker/index.ts).
 //
 // Generates a streamed, Claude-written narrative of the time window the user is
 // currently looking at on the Ever-When timeline, plus a curated tail of
 // resources and a few Wikipedia image candidates.
 //
 // Access: editor-only for now. The request must carry the caller's Supabase
-// JWT in the Authorization header; we verify it and check the email against the
-// editor allowlist before spending anything on the model.
+// JWT in the Authorization header; we verify it (locally, against the project's
+// JWKS) and check the email against the editor allowlist before spending
+// anything on the model.
 //
 // Billing seam (one code path, three modes):
 //   (a) owner-funded  — uses env.ANTHROPIC_API_KEY  [shipping now]
@@ -22,7 +23,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-interface Env {
+export interface SummaryEnv {
   ANTHROPIC_API_KEY?: string;
   EDITOR_EMAIL?: string;
   SUPABASE_URL?: string;
@@ -103,11 +104,10 @@ function occLine(o: { title: string; type?: string; start_year: number | null; e
   return `- ${o.title}${span}${t ? ` [${t.trim().replace(/,$/, "")}]` : ""}`;
 }
 
-export const onRequestPost = async (context: {
-  request: Request;
-  env: Env;
-}): Promise<Response> => {
-  const { request, env } = context;
+export async function handleSummary(request: Request, env: SummaryEnv): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "method_not_allowed" }, 405);
+  }
 
   let body: SummaryRequest;
   try {
@@ -250,7 +250,7 @@ export const onRequestPost = async (context: {
       connection: "keep-alive",
     },
   });
-};
+}
 
 // ---------------------------------------------------------------------------
 

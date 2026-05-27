@@ -1,0 +1,18 @@
+{
+  // Cloudflare Worker (with static assets) config — source of truth for both
+  // production (Workers Builds runs `wrangler versions upload`) and local
+  // `wrangler dev`. The Worker name MUST match the existing service.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "history-app",
+  "main": "worker/index.ts",
+  "compatibility_date": "2024-11-01",
+  // Needed by @supabase/supabase-js + jose on the Workers runtime.
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // Vite build output. The Worker serves these for every non-API route.
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // SPA: serve index.html for unmatched client routes.
+    "not_found_handling": "single-page-application"
+  }
+}
