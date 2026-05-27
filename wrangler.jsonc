@@ -8,6 +8,14 @@
   "compatibility_date": "2024-11-01",
   // Needed by @supabase/supabase-js + jose on the Workers runtime.
   "compatibility_flags": ["nodejs_compat"],
+  // Public, non-secret runtime values (the anon/publishable key already ships
+  // in the frontend bundle). Defined here so they survive every deploy without
+  // a manual dashboard step. ANTHROPIC_API_KEY is NOT here — it's a Secret set
+  // on the Worker (dashboard -> Settings -> Variables and Secrets).
+  "vars": {
+    "SUPABASE_URL": "https://wociyctgofotdxjgfbor.supabase.co",
+    "SUPABASE_ANON_KEY": "sb_publishable_ltLtGfLje95wBV7g0uXvhQ_GSyP20EV"
+  },
   "assets": {
     // Vite build output. The Worker serves these for every non-API route.
     "directory": "./dist",
