@@ -52,3 +52,7 @@ tools/v2/curation/c6_purge_tuples.txt
 
 # Local DB backup snapshots from tools/backup_hosted.py
 backups/
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
