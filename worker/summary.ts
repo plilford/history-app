@@ -147,14 +147,17 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
   });
 
   // Editor is always allowed (hardcoded fallback so the dashboard can never
-  // accidentally lock the owner out via the allowlist). Anyone else must have
-  // an active row in ai_summary_allowlist.
+  // accidentally lock the owner out via the allowlist) AND uncapped. Anyone
+  // else must have an active row in ai_summary_allowlist; their daily/monthly
+  // caps come from the same row (NULL = unlimited).
   const editorEmail = (env.EDITOR_EMAIL ?? DEFAULT_EDITOR_EMAIL).toLowerCase();
   const isEditor = email === editorEmail;
+  let dailyCap: number | null = null;
+  let monthlyCap: number | null = null;
   if (!isEditor) {
     const { data: row, error: allowErr } = await sb
       .from("ai_summary_allowlist")
-      .select("is_active")
+      .select("is_active, daily_cap, monthly_cap")
       .ilike("email", email)
       .maybeSingle();
     if (allowErr) {
@@ -163,6 +166,46 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
     if (!row || !row.is_active) {
       return json({ error: "forbidden" }, 403);
     }
+    dailyCap = row.daily_cap ?? null;
+    monthlyCap = row.monthly_cap ?? null;
+  }
+
+  // ---- Caps: count usage so far this UTC day / month ----------------------
+  if (dailyCap !== null || monthlyCap !== null) {
+    const now = new Date();
+    const startOfDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    ).toISOString();
+    const startOfMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    ).toISOString();
+
+    if (dailyCap !== null) {
+      const { count } = await sb
+        .from("ai_summary_usage")
+        .select("*", { count: "exact", head: true })
+        .ilike("user_email", email)
+        .gte("created_at", startOfDay);
+      if ((count ?? 0) >= dailyCap) {
+        return json({
+          error: "rate_limited",
+          detail: `Daily limit of ${dailyCap} reached. Resets at UTC midnight.`,
+        }, 429);
+      }
+    }
+    if (monthlyCap !== null) {
+      const { count } = await sb
+        .from("ai_summary_usage")
+        .select("*", { count: "exact", head: true })
+        .ilike("user_email", email)
+        .gte("created_at", startOfMonth);
+      if ((count ?? 0) >= monthlyCap) {
+        return json({
+          error: "rate_limited",
+          detail: `Monthly limit of ${monthlyCap} reached. Resets on the 1st (UTC).`,
+        }, 429);
+      }
+    }
   }
 
   // ---- Resolve API key (billing seam) -------------------------------------
@@ -170,8 +213,6 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
   if (!apiKey) {
     return json({ error: "server_misconfigured", detail: "ANTHROPIC_API_KEY missing" }, 500);
   }
-  // TODO: metering/quota — for a future paid tier, check this user's usage
-  // against a quota here (and write to ai_summary_usage at message_stop).
 
   const startYear = Math.round(body.window.startYear);
   const endYear = Math.round(body.window.endYear);
@@ -212,6 +253,11 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
     const detail = await upstream.text().catch(() => "");
     return json({ error: "upstream_error", status: upstream.status, detail }, 502);
   }
+
+  // Anthropic accepted the request — count this call against the user's
+  // daily/monthly cap. Fire-and-forget so we don't delay the stream start; a
+  // failed insert just means this one call won't be counted (best-effort).
+  void sb.from("ai_summary_usage").insert({ user_email: email });
 
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();

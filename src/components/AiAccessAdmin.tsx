@@ -18,6 +18,13 @@ interface AllowlistRow {
   added_at: string;
   added_by: string | null;
   notes: string | null;
+  daily_cap: number | null;
+  monthly_cap: number | null;
+}
+
+interface UsageCounts {
+  today: number;
+  month: number;
 }
 
 export interface AiAccessAdminProps {
@@ -36,6 +43,8 @@ function fmtDate(iso: string): string {
 export function AiAccessAdmin({ onClose }: AiAccessAdminProps) {
   const { user } = useAuth();
   const [rows, setRows] = useState<AllowlistRow[]>([]);
+  const [usage, setUsage] = useState<Record<string, UsageCounts>>({});
+  const [editorUsage, setEditorUsage] = useState<UsageCounts>({ today: 0, month: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
@@ -47,18 +56,40 @@ export function AiAccessAdmin({ onClose }: AiAccessAdminProps) {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
+    // Allowlist rows.
+    const allowP = supabase
       .from("ai_summary_allowlist")
-      .select("email, is_active, added_at, added_by, notes")
+      .select("email, is_active, added_at, added_by, notes, daily_cap, monthly_cap")
       .order("added_at", { ascending: false });
-    if (err) {
-      setError(err.message);
-      setRows([]);
-    } else {
-      setRows((data ?? []) as AllowlistRow[]);
+    // Usage rows for the current UTC month — RLS lets the editor see all.
+    const now = new Date();
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const usageP = supabase
+      .from("ai_summary_usage")
+      .select("user_email, created_at")
+      .gte("created_at", startOfMonth.toISOString());
+
+    const [allowR, usageR] = await Promise.all([allowP, usageP]);
+    if (allowR.error) { setError(allowR.error.message); setRows([]); setLoading(false); return; }
+    setRows((allowR.data ?? []) as AllowlistRow[]);
+
+    // Aggregate usage by lowered email.
+    const map: Record<string, UsageCounts> = {};
+    const startOfDayStr = startOfDay.toISOString();
+    if (!usageR.error) {
+      for (const r of (usageR.data ?? []) as Array<{ user_email: string; created_at: string }>) {
+        const e = (r.user_email ?? "").toLowerCase();
+        if (!map[e]) map[e] = { today: 0, month: 0 };
+        map[e].month++;
+        if (r.created_at >= startOfDayStr) map[e].today++;
+      }
     }
+    setUsage(map);
+    const myEmail = (user?.email ?? "").toLowerCase();
+    setEditorUsage(myEmail ? (map[myEmail] ?? { today: 0, month: 0 }) : { today: 0, month: 0 });
     setLoading(false);
-  }, []);
+  }, [user?.email]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -99,6 +130,25 @@ export function AiAccessAdmin({ onClose }: AiAccessAdminProps) {
     const { error: err } = await supabase
       .from("ai_summary_allowlist")
       .update({ is_active: next })
+      .eq("email", email);
+    if (err) { setError(err.message); await refresh(); }
+  };
+
+  const handleCapChange = async (email: string, field: "daily_cap" | "monthly_cap", value: string) => {
+    const trimmed = value.trim();
+    let parsed: number | null;
+    if (trimmed === "") {
+      parsed = null;
+    } else {
+      const n = parseInt(trimmed, 10);
+      if (Number.isNaN(n) || n < 0) return; // ignore invalid
+      parsed = n;
+    }
+    setError(null);
+    setRows((prev) => prev.map((r) => (r.email === email ? { ...r, [field]: parsed } : r)));
+    const { error: err } = await supabase
+      .from("ai_summary_allowlist")
+      .update({ [field]: parsed })
       .eq("email", email);
     if (err) { setError(err.message); await refresh(); }
   };
@@ -189,6 +239,16 @@ export function AiAccessAdmin({ onClose }: AiAccessAdminProps) {
         )}
 
         <div className="flex-1 overflow-y-auto">
+          {/* Editor's own usage (uncapped). Shown at the top because the
+              editor isn't in the allowlist table. */}
+          <div className="px-4 py-2 text-[12px] text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between flex-wrap gap-2">
+            <span><strong className="text-slate-700 dark:text-slate-300">Your usage</strong> (uncapped):</span>
+            <span className="flex gap-3">
+              <span>Today <strong>{editorUsage.today}</strong></span>
+              <span>Month <strong>{editorUsage.month}</strong></span>
+            </span>
+          </div>
+
           {loading ? (
             <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 animate-pulse">
               Loading…
@@ -220,6 +280,48 @@ export function AiAccessAdmin({ onClose }: AiAccessAdminProps) {
                         {row.added_by ? ` by ${row.added_by}` : ""}
                       </span>
                     </div>
+
+                    {/* Caps (editable, blank = unlimited) + usage counts. */}
+                    <div className="mt-1.5 flex items-center gap-3 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
+                      <label className="flex items-center gap-1">
+                        <span>Daily</span>
+                        <input
+                          type="number"
+                          min={0}
+                          defaultValue={row.daily_cap ?? ""}
+                          onBlur={(e) => void handleCapChange(row.email, "daily_cap", e.target.value)}
+                          placeholder="∞"
+                          className="w-14 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span>Monthly</span>
+                        <input
+                          type="number"
+                          min={0}
+                          defaultValue={row.monthly_cap ?? ""}
+                          onBlur={(e) => void handleCapChange(row.email, "monthly_cap", e.target.value)}
+                          placeholder="∞"
+                          className="w-16 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                        />
+                      </label>
+                      {(() => {
+                        const u = usage[row.email.toLowerCase()] ?? { today: 0, month: 0 };
+                        const dayAtCap = row.daily_cap !== null && u.today >= row.daily_cap;
+                        const monthAtCap = row.monthly_cap !== null && u.month >= row.monthly_cap;
+                        return (
+                          <>
+                            <span className={dayAtCap ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                              Today {u.today}{row.daily_cap !== null ? `/${row.daily_cap}` : ""}
+                            </span>
+                            <span className={monthAtCap ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                              Month {u.month}{row.monthly_cap !== null ? `/${row.monthly_cap}` : ""}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
+
                     {notesDraft?.email === row.email ? (
                       <div className="mt-1 flex gap-2">
                         <input

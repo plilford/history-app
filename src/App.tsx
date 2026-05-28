@@ -383,20 +383,20 @@ function AppInner() {
 
   // Mobile-only: hamburger menu is open. On desktop, settings sit inline in
   // the header so this is always false there.
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Close the menu on outside tap / Escape.
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (!settingsOpen) return;
     const onDocClick = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node | null;
       if (!target) return;
       if (menuRef.current && !menuRef.current.contains(target)) {
-        setMobileMenuOpen(false);
+        setSettingsOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileMenuOpen(false);
+      if (e.key === "Escape") setSettingsOpen(false);
     };
     // pointerdown beats click — closes before the underlying tap fires.
     document.addEventListener("pointerdown", onDocClick);
@@ -405,11 +405,7 @@ function AppInner() {
       document.removeEventListener("pointerdown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [mobileMenuOpen]);
-  // Auto-close the menu if the viewport grows back to desktop width.
-  useEffect(() => {
-    if (!isMobile && mobileMenuOpen) setMobileMenuOpen(false);
-  }, [isMobile, mobileMenuOpen]);
+  }, [settingsOpen]);
   const [pixelsPerYear, setPixelsPerYear] = useState(DEFAULT_PIXELS_PER_YEAR);
   const [error, setError] = useState<string | null>(null);
 
@@ -1545,7 +1541,7 @@ function AppInner() {
       onClick={() => {
         try { localStorage.removeItem(TIMELINE_NAMES_LS_KEY); } catch {}
         setTimelineNames(FACTORY_DEFAULT_TIMELINE_NAMES);
-        setMobileMenuOpen(false);
+        setSettingsOpen(false);
       }}
       title={`Reset to factory default columns: ${FACTORY_DEFAULT_TIMELINE_NAMES.join(" · ")}`}
       className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1.5"
@@ -1618,35 +1614,33 @@ function AppInner() {
     </div>
   );
 
-  // Summary controls (Summarise/Regenerate button), shown to the editor and
-  // anyone on the allowlist. Shared between the desktop header cluster and
-  // the mobile hamburger menu.
-  const summaryControls = canSummarise ? (
-    <div className="flex items-center gap-1.5">
-      <button
-        type="button"
-        onClick={handleSummariseClick}
-        title="AI summary of the visible period"
-        className={`px-2 py-1 rounded border ${
-          summaryOpen
-            ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
-            : "border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-        }`}
-      >
-        {summaryOpen ? "↻ Summary" : "Summarise"}
-      </button>
-      {/* Editor-only: open the access-management dashboard. */}
-      {isEditor && (
-        <button
-          type="button"
-          onClick={() => setAiAdminOpen(true)}
-          title="Manage who can use AI summary"
-          className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-        >
-          Access
-        </button>
-      )}
-    </div>
+  // Prominent Summarise / Regenerate button — bolder 2px border. Shown to the
+  // editor + anyone on the allowlist. Used in the desktop top bar and the
+  // mobile bottom ribbon (mobile menu doesn't carry it any more).
+  const summarisePrimaryButton = canSummarise ? (
+    <button
+      type="button"
+      onClick={handleSummariseClick}
+      title="AI summary of the visible period"
+      className={`px-3 py-1.5 rounded border-2 font-medium text-xs whitespace-nowrap ${
+        summaryOpen
+          ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+          : "border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+      }`}
+    >
+      {summaryOpen ? "↻ Summary" : "Summarise"}
+    </button>
+  ) : null;
+
+  // Editor-only "Manage AI access" entry. Lives inside the settings popover.
+  const accessMenuButton = isEditor ? (
+    <button
+      type="button"
+      onClick={() => { setAiAdminOpen(true); setSettingsOpen(false); }}
+      className="w-full text-left px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+    >
+      Manage AI access
+    </button>
   ) : null;
 
   // The panel element itself, rendered into either the side <aside> or the
@@ -1683,73 +1677,43 @@ function AppInner() {
           />
         </div>
 
-        {/* Desktop-only inline settings. Hidden via md:flex on phones. */}
-        <div className="hidden md:flex items-center gap-3 text-xs">
-          {summaryControls}
-          {densityControl}
-          {dateModeControl}
-          {lifespansToggle}
-          {regionsToggle}
-          {themeToggle}
-          {resetLayoutButton}
-        </div>
-
-        {/* Editor-only DB freshness reminder. Returns null for everyone
-            else so non-editor users don't see it. */}
-        <div className="hidden md:flex">
-          <DataFreshnessChip />
-        </div>
-
-        {/* Account button — sign in / sign out. Shown on desktop alongside
-            zoom buttons; on mobile it lives inside the hamburger menu below. */}
-        <div className="hidden md:flex">
-          {user ? (
-            <button
-              type="button"
-              onClick={() => signOut()}
-              title={`Signed in as ${user.email ?? "user"} — click to sign out`}
-              className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-            >
-              Sign out
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAuthModalOpen(true)}
-              className="text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-            >
-              Sign in
-            </button>
-          )}
-        </div>
+        {/* Desktop: prominent Summarise button in the top ribbon. On mobile it
+            lives in the bottom ribbon instead. */}
+        {summarisePrimaryButton && (
+          <div className="hidden md:flex flex-shrink-0">
+            {summarisePrimaryButton}
+          </div>
+        )}
 
         {zoomButtons}
 
-        {/* Hamburger menu — phone only. */}
+        {/* Unified settings button — opens a popover with density, date mode,
+            lifespans, regions, theme, reset layout, freshness, AI access (editor),
+            sign-in/out. Visible on every viewport. */}
         <button
           type="button"
-          onClick={() => setMobileMenuOpen((v) => !v)}
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileMenuOpen}
-          className={`md:hidden flex items-center justify-center w-9 h-9 rounded border border-slate-200 dark:border-slate-700 ${
-            mobileMenuOpen ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+          onClick={() => setSettingsOpen((v) => !v)}
+          aria-label={settingsOpen ? "Close settings" : "Open settings"}
+          aria-expanded={settingsOpen}
+          title="Settings"
+          className={`flex items-center justify-center w-9 h-9 rounded border border-slate-200 dark:border-slate-700 flex-shrink-0 ${
+            settingsOpen ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
           }`}
         >
           <span aria-hidden className="text-lg leading-none">
-            {mobileMenuOpen ? "×" : "≡"}
+            {settingsOpen ? "×" : "⚙"}
           </span>
         </button>
       </header>
 
-      {/* Mobile menu panel — drops below the header when ≡ is tapped. The
-          ref + useEffect above close it on outside tap / Escape. */}
-      {mobileMenuOpen && (
+      {/* Settings popover — drops below the header when the gear is clicked.
+          Used on every viewport (used to be mobile-only). */}
+      {settingsOpen && (
         <div
           ref={menuRef}
-          className="md:hidden sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
+          className="sticky top-[61px] z-30 flex-shrink-0 px-3 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
         >
-          <div className="flex flex-col gap-3 text-xs">
-            {summaryControls}
+          <div className="flex flex-col gap-3 text-xs max-w-md ml-auto">
             {densityControl}
             {dateModeControl}
             <div className="flex items-center gap-2 flex-wrap">
@@ -1768,6 +1732,15 @@ function AppInner() {
             {showRegionPanel && (
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800">{regionPanel}</div>
             )}
+
+            {/* Editor-only: DB freshness chip + Manage AI access. */}
+            {isEditor && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+                <DataFreshnessChip />
+                {accessMenuButton}
+              </div>
+            )}
+
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               {user ? (
                 <div className="flex items-center justify-between gap-2">
@@ -1776,7 +1749,7 @@ function AppInner() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => { signOut(); setMobileMenuOpen(false); }}
+                    onClick={() => { signOut(); setSettingsOpen(false); }}
                     className="shrink-0 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                   >
                     Sign out
@@ -1785,7 +1758,7 @@ function AppInner() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setAuthModalOpen(true); setMobileMenuOpen(false); }}
+                  onClick={() => { setAuthModalOpen(true); setSettingsOpen(false); }}
                   className="w-full px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                 >
                   Sign in / Sign up
@@ -1884,6 +1857,25 @@ function AppInner() {
           </aside>
         )}
       </div>
+
+      {/* Mobile/app bottom ribbon — prominent Summarise button for users with
+          access. Sits at the bottom of the viewport via the outer flex-col;
+          collapses on desktop (the top-bar button takes over there). */}
+      {canSummarise && isMobile && (
+        <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 md:hidden pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={handleSummariseClick}
+            className={`w-full px-3 py-2 rounded border-2 font-medium text-sm ${
+              summaryOpen
+                ? "bg-blue-600 text-white border-blue-600"
+                : "border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300"
+            }`}
+          >
+            {summaryOpen ? "↻ Regenerate this view" : "Summarise this view"}
+          </button>
+        </div>
+      )}
 
       {/* Narrow / app: full overlay drawer (no column squeeze, no images). */}
       {summaryPanel && isPanelOverlay && (
