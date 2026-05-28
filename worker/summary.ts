@@ -255,9 +255,18 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
   }
 
   // Anthropic accepted the request — count this call against the user's
-  // daily/monthly cap. Fire-and-forget so we don't delay the stream start; a
-  // failed insert just means this one call won't be counted (best-effort).
-  void sb.from("ai_summary_usage").insert({ user_email: email });
+  // daily/monthly cap. We AWAIT the insert (rather than fire-and-forget):
+  // Cloudflare Workers will tear down un-awaited promises once the response
+  // stream completes, which silently lost usage rows in practice. ~50ms cost
+  // before the stream starts is acceptable for a multi-second generation.
+  const { error: usageErr } = await sb
+    .from("ai_summary_usage")
+    .insert({ user_email: email });
+  if (usageErr) {
+    // Surfaces in Worker tail logs so we can spot RLS / schema issues.
+    // eslint-disable-next-line no-console
+    console.error("ai_summary_usage insert failed:", usageErr.message);
+  }
 
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
