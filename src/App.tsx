@@ -10,7 +10,9 @@ import { ChildrenPopup } from "./components/ChildrenPopup";
 import { ResourcesPopup } from "./components/ResourcesPopup";
 import { DataFreshnessChip } from "./components/DataFreshnessChip";
 import { SummaryPanel } from "./components/SummaryPanel";
+import { AiAccessAdmin } from "./components/AiAccessAdmin";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { useAiSummaryAccess } from "./lib/aiAccess";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
 import { ThemeProvider, useTheme } from "./lib/theme";
 import { FAVOURITES_TIMELINE_NAME, FAVOURITES_TIMELINE_SLUG } from "./lib/favouritesTimeline";
@@ -60,16 +62,6 @@ const DEFAULT_TIMELINE_NAMES = FACTORY_DEFAULT_TIMELINE_NAMES;
 // same allowlist server-side (see functions/api/summary.ts) — this constant
 // just decides whether the UI renders at all. Widening later = relaxing both.
 const EDITOR_EMAIL = "p.lilford@gmail.com";
-// Auto-summarise toggle (regenerate as the view settles). Persisted; default
-// OFF so the feature never spends money unless explicitly turned on.
-const AUTO_SUMMARISE_LS_KEY = "autoSummarise";
-// Safety cap on auto-mode calls within a single browsing session. A UX guard
-// against runaway spend, not the authoritative ceiling — that's the Anthropic
-// Console monthly budget. Bump this (one-line edit + redeploy) if it's ever
-// too tight in practice.
-const AUTO_SUMMARISE_SESSION_CAP = 30;
-// Debounce after the view stops changing before auto-mode regenerates.
-const AUTO_SUMMARISE_SETTLE_MS = 1200;
 // Below this container width the summary becomes a full overlay instead of a
 // side panel, so the three timeline columns never get squeezed below a
 // readable width by the panel.
@@ -89,14 +81,6 @@ function loadSummaryPanelWidth(): number {
     if (Number.isFinite(v) && v >= SUMMARY_PANEL_MIN_PX && v <= SUMMARY_PANEL_ABS_MAX_PX) return v;
   } catch { /* ignore */ }
   return SUMMARY_PANEL_WIDTH_PX;
-}
-
-function loadInitialAutoSummarise(): boolean {
-  try {
-    return localStorage.getItem(AUTO_SUMMARISE_LS_KEY) === "true";
-  } catch {
-    return false;
-  }
 }
 
 /** Restore the user's last-used column layout, falling back to the factory
@@ -282,10 +266,12 @@ export default function App() {
 
 function AppInner() {
   const { user, session, signOut } = useAuth();
-  // Editor-only gate for the AI summary feature. Conditional render, not a
-  // disabled state — non-editors get no summary UI at all. Case-insensitive to
-  // match the server-side check in functions/api/summary.ts.
+  // Editor (hardcoded) — used for owner-only controls like the AI-access
+  // admin dashboard. The summary feature itself uses canSummarise below,
+  // which also covers anyone on the editor-managed allowlist.
+  // Case-insensitive to match the server-side check in worker/summary.ts.
   const isEditor = (user?.email ?? "").toLowerCase() === EDITOR_EMAIL.toLowerCase();
+  const { canSummarise } = useAiSummaryAccess();
   const { ids: favouriteIds, isFavourite } = useFavourites();
   const { theme, toggle: toggleTheme } = useTheme();
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -375,7 +361,7 @@ function AppInner() {
   const isPanelOverlay = outerWidth < SUMMARY_SIDE_PANEL_MIN_PX;
   // While the panel is docked beside the timeline, drop columns sooner (use a
   // larger comfortable min width) so the remaining columns stay readable.
-  const panelDocked = summaryOpen && isEditor && !isPanelOverlay;
+  const panelDocked = summaryOpen && canSummarise && !isPanelOverlay;
 
   // Responsive layout: how many timeline columns fit + their width. Measures
   // the <main> area (already excludes the docked panel). The min-column-width
@@ -872,16 +858,11 @@ function AppInner() {
   // ---- AI summary panel ----------------------------------------------------
   // NOTE: summaryOpen / isPanelOverlay / panelDocked are declared up near the
   // layout hook (the column layout depends on them).
-  // Auto-regenerate as the view settles (persisted; default OFF).
-  const [autoSummarise, setAutoSummarise] = useState<boolean>(loadInitialAutoSummarise);
-  useEffect(() => {
-    try {
-      localStorage.setItem(AUTO_SUMMARISE_LS_KEY, String(autoSummarise));
-    } catch { /* non-fatal */ }
-  }, [autoSummarise]);
   // Bumped by the "Summarise" / "Regenerate" buttons to force a (re)generation
   // for the current view, bypassing the cache.
   const [summaryTrigger, setSummaryTrigger] = useState(0);
+  // Editor-only AI-access admin dashboard.
+  const [aiAdminOpen, setAiAdminOpen] = useState(false);
   // Draggable dock width (persisted). The drag handle lives on the panel's left
   // edge; dragging left widens it. Columns recompute via the <main>
   // ResizeObserver as this changes.
@@ -1637,9 +1618,10 @@ function AppInner() {
     </div>
   );
 
-  // Editor-only summary controls (Summarise/Regenerate + Auto toggle), shared
-  // between the desktop header cluster and the mobile hamburger menu.
-  const summaryControls = isEditor ? (
+  // Summary controls (Summarise/Regenerate button), shown to the editor and
+  // anyone on the allowlist. Shared between the desktop header cluster and
+  // the mobile hamburger menu.
+  const summaryControls = canSummarise ? (
     <div className="flex items-center gap-1.5">
       <button
         type="button"
@@ -1653,36 +1635,32 @@ function AppInner() {
       >
         {summaryOpen ? "↻ Summary" : "Summarise"}
       </button>
-      <label
-        className="flex items-center gap-1 cursor-pointer text-slate-600 dark:text-slate-400"
-        title="Auto-regenerate as you pan/zoom (uses more API credits)"
-      >
-        <input
-          type="checkbox"
-          checked={autoSummarise}
-          onChange={(e) => setAutoSummarise(e.target.checked)}
-          className="accent-blue-600"
-        />
-        Auto
-      </label>
+      {/* Editor-only: open the access-management dashboard. */}
+      {isEditor && (
+        <button
+          type="button"
+          onClick={() => setAiAdminOpen(true)}
+          title="Manage who can use AI summary"
+          className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+        >
+          Access
+        </button>
+      )}
     </div>
   ) : null;
 
   // The panel element itself, rendered into either the side <aside> or the
-  // full overlay depending on width. Only ever built for the editor.
-  const summaryPanel = summaryOpen && isEditor ? (
+  // full overlay depending on width. Built for the editor and allowlist users.
+  const summaryPanel = summaryOpen && canSummarise ? (
     <SummaryPanel
       window={visibleWindow}
       timelines={summaryTimelines}
       showing={visibleUnion}
       viewState={{ showLifespans, regionWeighted: summaryRegionWeighted }}
       accessToken={session?.access_token ?? null}
-      autoMode={autoSummarise}
       generationTrigger={summaryTrigger}
       isOverlay={isPanelOverlay}
       onClose={() => setSummaryOpen(false)}
-      settleMs={AUTO_SUMMARISE_SETTLE_MS}
-      sessionCap={AUTO_SUMMARISE_SESSION_CAP}
     />
   ) : null;
 
@@ -2018,6 +1996,10 @@ function AppInner() {
 
       {authModalOpen && (
         <AuthModal onClose={() => setAuthModalOpen(false)} />
+      )}
+
+      {aiAdminOpen && isEditor && (
+        <AiAccessAdmin onClose={() => setAiAdminOpen(false)} />
       )}
 
       {suggestionSeed && (

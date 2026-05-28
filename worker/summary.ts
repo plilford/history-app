@@ -125,25 +125,44 @@ export async function handleSummary(request: Request, env: SummaryEnv): Promise<
     return json({ error: "server_misconfigured", detail: "supabase env missing" }, 500);
   }
 
-  // ---- Auth: verify JWT + editor allowlist --------------------------------
+  // ---- Auth: verify JWT, then editor OR allowlist --------------------------
   const authHeader = request.headers.get("Authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return json({ error: "unauthorized" }, 401);
 
-  const sb: SupabaseClient = createClient(supabaseUrl, supabaseAnon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
   let email = "";
   try {
     const { payload } = await jwtVerify(token, getJwks(supabaseUrl));
-    email = String(payload.email ?? "");
+    email = String(payload.email ?? "").toLowerCase();
   } catch (e) {
     return json({ error: "unauthorized", detail: (e as Error)?.message ?? "jwt verify failed" }, 401);
   }
-  const editorEmail = env.EDITOR_EMAIL ?? DEFAULT_EDITOR_EMAIL;
-  if (email.toLowerCase() !== editorEmail.toLowerCase()) {
-    return json({ error: "forbidden" }, 403);
+
+  // Supabase client carrying the user's JWT so RLS can authorise both the
+  // allowlist self-read policy below AND (since the data tables are
+  // public-read) all the gatherContext queries.
+  const sb: SupabaseClient = createClient(supabaseUrl, supabaseAnon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  // Editor is always allowed (hardcoded fallback so the dashboard can never
+  // accidentally lock the owner out via the allowlist). Anyone else must have
+  // an active row in ai_summary_allowlist.
+  const editorEmail = (env.EDITOR_EMAIL ?? DEFAULT_EDITOR_EMAIL).toLowerCase();
+  const isEditor = email === editorEmail;
+  if (!isEditor) {
+    const { data: row, error: allowErr } = await sb
+      .from("ai_summary_allowlist")
+      .select("is_active")
+      .ilike("email", email)
+      .maybeSingle();
+    if (allowErr) {
+      return json({ error: "forbidden", detail: "allowlist check failed" }, 403);
+    }
+    if (!row || !row.is_active) {
+      return json({ error: "forbidden" }, 403);
+    }
   }
 
   // ---- Resolve API key (billing seam) -------------------------------------

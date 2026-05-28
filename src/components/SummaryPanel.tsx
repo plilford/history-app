@@ -37,22 +37,15 @@ export interface SummaryPanelProps {
   showing: CompactOccurrence[];
   viewState: { showLifespans: boolean; regionWeighted: boolean };
   accessToken: string | null;
-  /** Auto-regenerate as the view settles. */
-  autoMode: boolean;
   /** Increments to force a (re)generation for the current view, bypassing cache. */
   generationTrigger: number;
   /** Full-screen overlay (narrow/app) — suppresses images, per spec. */
   isOverlay: boolean;
   onClose: () => void;
-  /** Settle debounce for auto mode (ms). */
-  settleMs: number;
-  /** Per-session call cap for auto mode. */
-  sessionCap: number;
 }
 
-// Module-level so they survive panel unmount within a session.
+// Module-level so it survives panel unmount within a session.
 const summaryCache = new Map<string, { content: string; meta: SummaryMeta }>();
-let autoCallCount = 0;
 
 const SUMMARY_FONT_MIN = 11;
 const SUMMARY_FONT_MAX = 22;
@@ -102,13 +95,12 @@ function subtypeLabel(s: string | null): string {
 }
 
 export function SummaryPanel(props: SummaryPanelProps) {
-  const { window: win, isOverlay, onClose, autoMode, generationTrigger } = props;
+  const { window: win, isOverlay, onClose, generationTrigger } = props;
 
   const [content, setContent] = useState("");
   const [meta, setMeta] = useState<SummaryMeta | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "streaming" | "done" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [capReached, setCapReached] = useState(false);
   // Cache key the displayed content belongs to (so we can show a "view changed"
   // hint when the live view has drifted away from it).
   const [displayedKey, setDisplayedKey] = useState<string>("");
@@ -164,7 +156,6 @@ export function SummaryPanel(props: SummaryPanelProps) {
     setMeta(null);
     setResolvedImages([]);
     setErrorMsg(null);
-    setCapReached(false);
     setStatus("loading");
     setDisplayedKey(key);
 
@@ -268,27 +259,6 @@ export function SummaryPanel(props: SummaryPanelProps) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Auto: regenerate (cache-first) when the view settles on a new key.
-  useEffect(() => {
-    if (!autoMode) return;
-    if (!liveKey) return;
-    if (liveKey === displayedKey && status !== "idle") return;
-    const handle = setTimeout(() => {
-      const cached = summaryCache.get(liveKey);
-      if (cached) {
-        void generate(false); // loads from cache
-        return;
-      }
-      if (autoCallCount >= props.sessionCap) {
-        setCapReached(true);
-        return;
-      }
-      autoCallCount += 1;
-      void generate(false);
-    }, props.settleMs);
-    return () => clearTimeout(handle);
-  }, [autoMode, liveKey, displayedKey, status, generate, props.settleMs, props.sessionCap]);
 
   // Resolve Wikipedia thumbnails for the side-panel image strip.
   useEffect(() => {
@@ -443,12 +413,6 @@ export function SummaryPanel(props: SummaryPanelProps) {
             >
               Retry
             </button>
-          </div>
-        )}
-
-        {capReached && status !== "streaming" && status !== "loading" && (
-          <div className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
-            Auto-summary paused (session limit reached). Use Regenerate to continue.
           </div>
         )}
 
