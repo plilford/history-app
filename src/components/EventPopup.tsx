@@ -52,6 +52,10 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   /** Click handler for a tag chip — navigates the timeline to that
    *  subject (search-bar style). */
   onPickSubject?: (subjectId: number) => void;
+  /** When the user clicks the flag button, the parent closes the hover popup
+   *  and opens the FlagIssueModal. Signed-out users get onSignInRequest
+   *  instead (same fallback as the favourite heart). */
+  onFlagIssue?: (event: EventWithPriority) => void;
 }>(function EventPopup({
   event,
   anchorRect,
@@ -67,6 +71,7 @@ export const EventPopup = forwardRef<HTMLDivElement, {
   onShowResources,
   taggedSubjects = [],
   onPickSubject,
+  onFlagIssue,
 }, ref) {
   const [summary, setSummary] = useState<WikiSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,6 +88,14 @@ export const EventPopup = forwardRef<HTMLDivElement, {
     const isNowFav = await toggle(event.id);
     // Only trigger suggestions on add, not remove.
     if (!wasFav && isNowFav) onFavourited?.(event);
+  }
+
+  function handleFlagClick() {
+    if (!user) {
+      onSignInRequest?.();
+      return;
+    }
+    onFlagIssue?.(event);
   }
 
   useEffect(() => {
@@ -210,6 +223,17 @@ export const EventPopup = forwardRef<HTMLDivElement, {
             >
               <span aria-hidden className="text-base leading-none">📚</span>
               <span aria-hidden className="text-sm tabular-nums">{resourceCount}</span>
+            </button>
+          )}
+          {onFlagIssue && (
+            <button
+              type="button"
+              onClick={handleFlagClick}
+              aria-label={!user ? "Sign in to flag an issue" : "Flag an issue or suggest a change"}
+              title={!user ? "Sign in to flag an issue" : "Flag an issue or suggest a change"}
+              className="shrink-0 -mt-1 w-8 h-8 flex items-center justify-center rounded text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700"
+            >
+              <span aria-hidden className="text-base leading-none">⚑</span>
             </button>
           )}
           <button

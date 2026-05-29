@@ -11,6 +11,8 @@ import { ResourcesPopup } from "./components/ResourcesPopup";
 import { DataFreshnessChip } from "./components/DataFreshnessChip";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { AiAccessAdmin } from "./components/AiAccessAdmin";
+import { FlagIssueModal } from "./components/FlagIssueModal";
+import { IssueFlagsAdmin } from "./components/IssueFlagsAdmin";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { useAiSummaryAccess } from "./lib/aiAccess";
 import { FavouritesProvider, useFavourites } from "./lib/favourites";
@@ -859,6 +861,10 @@ function AppInner() {
   const [summaryTrigger, setSummaryTrigger] = useState(0);
   // Editor-only AI-access admin dashboard.
   const [aiAdminOpen, setAiAdminOpen] = useState(false);
+  // Editor-only flagged-issues review dashboard.
+  const [flagsAdminOpen, setFlagsAdminOpen] = useState(false);
+  // When set, the FlagIssueModal is open seeded on this occurrence.
+  const [flagSeed, setFlagSeed] = useState<EventWithPriority | null>(null);
   // Draggable dock width (persisted). The drag handle lives on the panel's left
   // edge; dragging left widens it. Columns recompute via the <main>
   // ResizeObserver as this changes.
@@ -1643,6 +1649,17 @@ function AppInner() {
     </button>
   ) : null;
 
+  // Editor-only "Review flagged issues" entry. Lives inside the settings popover.
+  const flagsMenuButton = isEditor ? (
+    <button
+      type="button"
+      onClick={() => { setFlagsAdminOpen(true); setSettingsOpen(false); }}
+      className="w-full text-left px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+    >
+      Review flagged issues
+    </button>
+  ) : null;
+
   // The panel element itself, rendered into either the side <aside> or the
   // full overlay depending on width. Built for the editor and allowlist users.
   const summaryPanel = summaryOpen && canSummarise ? (
@@ -1738,6 +1755,7 @@ function AppInner() {
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
                 <DataFreshnessChip />
                 {accessMenuButton}
+                {flagsMenuButton}
               </div>
             )}
 
@@ -1973,6 +1991,11 @@ function AppInner() {
                 : "ensure-master-first",
             });
           }}
+          onFlagIssue={(ev) => {
+            clearTimers();
+            setHovered(null);
+            setFlagSeed(ev);
+          }}
         />
       )}
 
@@ -1992,6 +2015,22 @@ function AppInner() {
 
       {aiAdminOpen && isEditor && (
         <AiAccessAdmin onClose={() => setAiAdminOpen(false)} />
+      )}
+
+      {flagsAdminOpen && isEditor && (
+        <IssueFlagsAdmin onClose={() => setFlagsAdminOpen(false)} />
+      )}
+
+      {flagSeed && (
+        <FlagIssueModal
+          event={flagSeed}
+          relatedResourceIds={
+            flagSeed.occurrence_type === "resource"
+              ? Array.from(tagsByResource.get(flagSeed.id) ?? [])
+              : Array.from(resourcesBySubject.get(flagSeed.id) ?? [])
+          }
+          onClose={() => setFlagSeed(null)}
+        />
       )}
 
       {suggestionSeed && (
