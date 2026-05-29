@@ -467,6 +467,10 @@ function buildSystemPrompt(): string {
     "contemporaneous events, and brief before/after reference points so the window feels situated in time.",
     "Refer to specific people and events by name. Be accurate; do NOT invent facts, dates, or sources.",
     "Do not address the reader as 'you' or describe the app/screen; just tell the history.",
+    "Open with a concrete fact, scene, or development from the period — NOT a grand framing sentence.",
+    "Avoid sweeping superlatives about the period's importance ('one of the most consequential turning points",
+    "in history', 'a pivotal era that shaped the modern world', etc.). Claim large significance only when it is",
+    "genuinely warranted and specific, and at most once; most periods should simply be narrated on their own terms.",
     "Output prose only — no headings, no bullet points, no lists. A curated resource list is handled separately.",
   ].join(" ");
 }
