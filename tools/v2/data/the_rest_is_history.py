@@ -60,7 +60,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Tom Holland and Dominic Sandbrook host David Hunt to survey Australian history from its deep prehistory to early European contact. Hunt reviews archaeological and genetic evidence for human arrival (~60–65,000 years ago), discusses Australian megafauna and their contested extinction (~40–44,000 BP), and explains Aboriginal Dreamtime, songlines and cultural diversity. The conversation moves to external contacts: Lapita/Polynesian influences (dingoes), Macassan trepang fisheries from Sulawesi,...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT2957294549.mp3?updated=1777394961',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ["Seven Years' War", 'Captain James Cook'],
+     "tags": ['Settlement of Australia', 'Captain James Cook'],
     },
     {
      "id": 1_008_003,
@@ -204,7 +204,7 @@ OCCURRENCES: list[dict] = [
      "description": 'This Rest Is History episode is a wide-ranging discussion of Babylon, concentrating on its most famous period from Nebuchadnezzar II onward. Tom Holland (who wrote Persian Fire) and Dominic Sandbrook describe Babylon’s monumental architecture — walls, the Ishtar Gate, the great ziggurat (Etemenanki) — and the city’s reputation as a cosmopolitan, wealthy, and morally ambivalent center. They discuss Herodotus’ accounts, the debated reality and provenance of the Hanging Gardens (mentioning Steph...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT7141377161.mp3?updated=1777394964',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Cyrus conquers Babylon', 'Cyrus the Great'],
+     "tags": ['Cyrus conquers Babylon', 'Cyrus the Great', "Hanging Gardens of Babylon"],
     },
     {
      "id": 1_008_015,
@@ -990,7 +990,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook speak with Dr. Mehreen Chidurazvi (also referenced as Maureen Cheeda-Razvi) about the history, construction and symbolism of the Taj Mahal. The conversation traces Mughal origins from Babur through Humayun, Akbar, Jahangir and Shah Jahan, explains Persian and Timurid artistic influences, and examines the relationship between Shah Jahan and Mumtaz Mahal that prompted the mausoleum. They cover construction chronology (mausoleum 1632–1636; full complex by...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT2445608477.mp3?updated=1692810615',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Genghis Khan'],
+     "tags": ['Genghis Khan', "Humayun", "Humayun reconquers northern India"],
     },
     {
      "id": 1_008_080,
@@ -1014,6 +1014,7 @@ OCCURRENCES: list[dict] = [
      "description": "Tom Holland and Dominic Sandbrook host Eleanor Rosamond Barraclough to discuss Viking voyages, the Icelandic sagas and how later medieval Icelanders recorded their world. Barraclough outlines the settlement of Iceland around the late ninth century, archaeological dating tied to a volcanic eruption circa 870–871, and the mix of Norwegian and British Isles ancestry among early settlers. The conversation covers Greenland’s settlement (c. 985), the Vinland voyages around AD 1000 and the L'Anse au...",
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT8280648151.mp3?updated=1777394993',
      "priorities": {"the-rest-is-history-podcast": 900000},
+     "tags": ['Norse settlement of Iceland', 'Norse settlement of Greenland', 'Norse contact at L\'Anse aux Meadows', 'Leif Erikson'],
     },
     {
      "id": 1_008_082,
@@ -1074,7 +1075,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook interview Professor Martin Jones about Welsh identity and the history of Wales. The discussion ranges from early claims of Roman ancestry (Magnus Maximus) and medieval Welsh polities through the Norman incursions and the creation of the Marches, to Edward I’s conquest and symbolic castle-building. Jones examines legal inequality imposed on the Welsh, Owain Glyndŵr’s rebellion, Tudor-era changes including Henry VII’s Welsh connections and the Laws in Wal...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT2657098007.mp3?updated=1777395002',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Glyndŵr crowned Prince of Wales at Machynlleth', 'Industrial Revolution', 'Battle of Agincourt', 'Henry V of England', 'Henry VII of England', 'Thomas Cromwell', 'Charles III'],
+     "tags": ['Brittonic kingdoms emerge', "Offa's Dyke built", 'Rhodri Mawr unites much of Wales', 'Hywel Dda codifies Welsh law', 'Treaty of Montgomery', "Edward I's conquest of Wales", 'Caernarfon Castle begun', 'Statute of Wales', "Owain Glyndŵr's revolt", 'Glyndŵr crowned Prince of Wales at Machynlleth', 'Henry VII of England', 'Acts of Union (Wales, 1536-1543)', 'Thomas Cromwell', "William Morgan's Welsh Bible", 'Merthyr Rising', 'Flooding of Capel Celyn', 'Aberfan disaster', 'Investiture of Charles as Prince of Wales', 'Devolution referendums of 1997', 'Charles III'],
     },
     {
      "id": 1_008_087,
@@ -1370,7 +1371,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook are joined by anthropologist and historian Luke Pepperer to survey female military and political leadership across African history. The conversation opens with the Dahomey Agoji (the so-called "Amazons") and their contested portrayal in popular culture, then moves to an extended profile of Njinga of Ndongo (a seventeenth-century ruler who negotiated with and fought the Portuguese, allied with the Dutch, and reconstituted her realm). Pepperer also discus...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT5973082485.mp3?updated=1777394944',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Atlantic slave trade', 'Mary, Queen of Scots'],
+     "tags": ['Atlantic slave trade', 'Kingdom of Benin', 'Kingdom of Kongo'],
     },
     {
      "id": 1_008_111,
@@ -1493,7 +1494,7 @@ OCCURRENCES: list[dict] = [
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT4666881212.mp3?updated=1729782312',
      "resource_episodes": [{'title': '351: Amsterdam: Miracles, Money, and Mud (Part 1)', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT4666881212.mp3?updated=1729782312', 'date': '2023-07-17'}, {'title': '352: Amsterdam: Kings, Canals, and Coffee Houses (Part 2)', 'url': 'https://wise.com/campaign/restishistory', 'date': '2023-07-20'}],
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['René Descartes', 'Glorious Revolution', 'John Locke', 'John Calvin', 'Philip II of Spain'],
+     "tags": ['René Descartes', 'Glorious Revolution', 'John Locke', 'John Calvin', 'Philip II of Spain', "Baruch Spinoza"],
     },
     {
      "id": 1_008_121,
@@ -1659,7 +1660,7 @@ OCCURRENCES: list[dict] = [
      "description": 'Hosts Tom Holland and Dominic Sandbrook discuss the Enlightenment: its dates, key figures, geographic variations and cultural consequences. They debate whether the Enlightenment represented a decisive break from Christianity or a mutation within Christian Europe, and situate it in the late 17th to 18th centuries (c. 1660 onward), citing Spinoza, Newton, Voltaire, Diderot, Rousseau and others. Topics include coffeehouses, Freemasonry, science as a worldview, the republic of letters, the Scotti...',
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT8077157127.mp3?updated=1777394988',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['French Revolution', 'American Revolutionary War', 'English Civil War', 'Glorious Revolution', 'Napoleon Bonaparte', 'Wolfgang Amadeus Mozart', 'Atlantic slave trade', 'Voltaire', 'Immanuel Kant', 'Adam Smith', 'Samuel Johnson', 'Benjamin Franklin'],
+     "tags": ['French Revolution', 'American Revolutionary War', 'English Civil War', 'Glorious Revolution', 'Napoleon Bonaparte', 'Wolfgang Amadeus Mozart', 'Atlantic slave trade', 'Voltaire', 'Immanuel Kant', 'Adam Smith', 'Samuel Johnson', 'Benjamin Franklin', "Baruch Spinoza"],
     },
     {
      "id": 1_008_135,
@@ -2120,17 +2121,6 @@ OCCURRENCES: list[dict] = [
      "resource_episodes": [{'title': '243. Trafalgar: A World at War (Part 1)', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT3542298238.mp3?updated=1729784394', 'date': '2022-10-17'}, {'title': '244. Trafalgar: Countdown to Annihilation (Part 2)', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT5489746159.mp3?updated=1729784420', 'date': '2022-10-20'}, {'title': '245. Trafalgar: Victory (Part 3)', 'url': 'https://pdst.fm/e/traffic.megaphone.fm/GLT4217731619.mp3?updated=1729784451', 'date': '2022-10-21'}],
      "priorities": {"the-rest-is-history-podcast": 900000},
      "tags": ['Battle of Trafalgar', 'Horatio Nelson', 'Napoleon Bonaparte', 'Battle of the Nile', "Seven Years' War", 'Battle of Austerlitz', 'Peninsular War', 'Jane Austen', 'Isambard Kingdom Brunel', 'French Revolutionary Wars', 'William Wilberforce', 'Continental System'],
-    },
-    {
-     "id": 1_008_173,
-     "type": "resource",
-     "subtype": "podcast-episode",
-     "title": "History's Greatest Dogs (TRIH ep 323)",
-     "start_year": 1805,
-     "description": "Hosts Tom Holland and Dominic Sandbrook present a whimsical but informative episode listing their seven greatest dogs in history. They open with Boson, Lord Byron's dog, then discuss Checkers, Richard Nixon’s famous cocker spaniel and the 1952 “Checkers speech.” They examine Greyfriars Bobby and the mixture of legend and later embellishment surrounding the Edinburgh terrier, and touch on Eleanor Atkinson’s novel that popularized the tale. The episode covers Adolf Hitler’s dogs (including Blon...",
-     "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT5170761413.mp3?updated=1777394160',
-     "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Battle of Trafalgar', 'Richard Nixon'],
     },
     {
      "id": 1_008_174,
@@ -2869,7 +2859,7 @@ OCCURRENCES: list[dict] = [
      "description": "This episode is the second Rest Is History instalment focused on oil, featuring Helen Thompson, Professor of Political Economy at Cambridge. Thompson and the hosts (Tom Holland and Dominic Sandbrook) examine oil's political and geopolitical influence across the twentieth and twenty-first centuries: how US oil shaped domestic politics (notably Texas and figures like Lyndon B. Johnson), cultural reflections in shows like Dallas, and the role of oil in both Gulf Wars. They discuss Europe's faile...",
      "resource_link": 'https://pdst.fm/e/traffic.megaphone.fm/GLT4572551005.mp3?updated=1777394988',
      "priorities": {"the-rest-is-history-podcast": 900000},
-     "tags": ['Cuban Missile Crisis', 'Russian invasion of Ukraine', 'Suez Crisis', 'Vladimir Putin', 'John F. Kennedy', 'Lyndon B. Johnson'],
+     "tags": ['Gulf War', 'Cuban Missile Crisis', 'Russian invasion of Ukraine', 'Suez Crisis', 'Vladimir Putin', 'John F. Kennedy', 'Lyndon B. Johnson'],
     },
     {
      "id": 1_008_234,

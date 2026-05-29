@@ -68,7 +68,7 @@ _NONFICTION: list[dict] = [
      "description": "Charles C. Mann surveys recent archaeology showing pre-Columbian Americas were more populous, urbanised, and ecologically managed than once thought.",
      "resource_link": "https://en.wikipedia.org/wiki/1491:_New_Revelations_of_the_Americas_Before_Columbus",
      "priorities": {"popular-history-books": 900000},
-     "tags": []},
+     "tags": ["Cahokia at its peak", "Ancestral Puebloan culture", "Aztec Empire", "Inca Empire"]},
 
     {"id": 1_009_005, "type": "resource", "subtype": "book-nonfiction",
      "title": "1493: Uncovering the New World Columbus Created (Mann, 2011)",
@@ -84,7 +84,7 @@ _NONFICTION: list[dict] = [
      "description": "Peter Frankopan re-centres world history on Central Asia and the trade routes that connected East and West for two millennia.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Silk_Roads:_A_New_History_of_the_World",
      "priorities": {"popular-history-books": 910000},
-     "tags": []},
+     "tags": ["Han open the Silk Road", "Kushan Empire"]},
 
     {"id": 1_009_007, "type": "resource", "subtype": "book-nonfiction",
      "title": "A History of the World in 100 Objects (MacGregor, 2010)",
@@ -141,7 +141,7 @@ _NONFICTION: list[dict] = [
      "description": "Thucydides' analytical history of the war between Athens and Sparta — a foundational text of political realism.",
      "resource_link": "https://en.wikipedia.org/wiki/History_of_the_Peloponnesian_War",
      "priorities": {"popular-history-books": 950000},
-     "tags": []},
+     "tags": ["Peloponnesian War", "Pericles"]},
 
     {"id": 1_009_016, "type": "resource", "subtype": "book-nonfiction",
      "title": "The Histories (Polybius, ~150 BCE)",
@@ -166,7 +166,7 @@ _NONFICTION: list[dict] = [
      "description": "Mary Beard's accessible single-volume Roman history from the founding to Caracalla's universal citizenship grant.",
      "resource_link": "https://en.wikipedia.org/wiki/SPQR:_A_History_of_Ancient_Rome",
      "priorities": {"popular-history-books": 940000},
-     "tags": []},
+     "tags": ["Founding of Rome (traditional)", "Roman Republic founded", "Julius Caesar", "Augustus"]},
 
     {"id": 1_009_022, "type": "resource", "subtype": "book-nonfiction",
      "title": "The History of the Decline and Fall of the Roman Empire (Gibbon, 1776-1789)",
@@ -255,7 +255,7 @@ _NONFICTION: list[dict] = [
      "description": "Dan Jones' narrative of the Plantagenet dynasty from Henry II to Richard II.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Plantagenets_(book)",
      "priorities": {"popular-history-books": 880000},
-     "tags": []},
+     "tags": ["Henry II of England", "Magna Carta", "Reign of Edward I", "Edward III of England"]},
 
     {"id": 1_009_043, "type": "resource", "subtype": "book-nonfiction",
      "title": "The Wars of the Roses (Jones, 2014)",
@@ -263,7 +263,7 @@ _NONFICTION: list[dict] = [
      "description": "Dan Jones on the dynastic civil war that ended the Plantagenets and brought in the Tudors.",
      "resource_link": "https://en.wikipedia.org/wiki/Dan_Jones_(writer)",
      "priorities": {"popular-history-books": 850000},
-     "tags": []},
+     "tags": ["Wars of the Roses", "Richard III of England", "Battle of Bosworth Field", "Henry VII of England"]},
 
     {"id": 1_009_044, "type": "resource", "subtype": "book-nonfiction",
      "title": "The Crusades: The Authoritative History of the War for the Holy Land (Asbridge, 2010)",
@@ -279,7 +279,7 @@ _NONFICTION: list[dict] = [
      "description": "Christopher Tyerman's magisterial 1000-page history of the medieval Crusades.",
      "resource_link": "https://en.wikipedia.org/wiki/God%27s_War:_A_New_History_of_the_Crusades",
      "priorities": {"popular-history-books": 830000},
-     "tags": []},
+     "tags": ["First Crusade", "Siege of Jerusalem (1099)", "Third Crusade", "Saladin"]},
 
     {"id": 1_009_046, "type": "resource", "subtype": "book-nonfiction",
      "title": "Domesday: The Inquest and the Book (Hallam, 1986)",
@@ -311,7 +311,7 @@ _NONFICTION: list[dict] = [
      "description": "Roger Crowley's day-by-day narrative of the Ottoman siege that ended the Byzantine Empire.",
      "resource_link": "https://en.wikipedia.org/wiki/Roger_Crowley",
      "priorities": {"popular-history-books": 870000},
-     "tags": []},
+     "tags": ["Fall of Constantinople"]},
 
     # ===== Tudors / Reformation ===============================================
     {"id": 1_009_060, "type": "resource", "subtype": "book-nonfiction",
@@ -385,7 +385,7 @@ _NONFICTION: list[dict] = [
      "description": "Diane Purkiss' social history of the English Civil War, focused on ordinary lives.",
      "resource_link": "https://en.wikipedia.org/wiki/Diane_Purkiss",
      "priorities": {"popular-history-books": 800000},
-     "tags": []},
+     "tags": ["English Civil War", "Execution of Charles I", "Oliver Cromwell"]},
 
     {"id": 1_009_081, "type": "resource", "subtype": "book-nonfiction",
      "title": "God's Englishman: Oliver Cromwell and the English Revolution (Hill, 1970)",
@@ -393,7 +393,7 @@ _NONFICTION: list[dict] = [
      "description": "Christopher Hill's Marxist-flavoured biography placing Cromwell in the radical religious ferment of the 17th century.",
      "resource_link": "https://en.wikipedia.org/wiki/Christopher_Hill_(historian)",
      "priorities": {"popular-history-books": 800000},
-     "tags": []},
+     "tags": ["Oliver Cromwell", "Execution of Charles I", "English Civil War"]},
 
     {"id": 1_009_082, "type": "resource", "subtype": "book-nonfiction",
      "title": "Cromwell, Our Chief of Men (Fraser, 1973)",
@@ -401,7 +401,7 @@ _NONFICTION: list[dict] = [
      "description": "Antonia Fraser's full-length narrative biography of Cromwell.",
      "resource_link": "https://en.wikipedia.org/wiki/Antonia_Fraser",
      "priorities": {"popular-history-books": 800000},
-     "tags": []},
+     "tags": ["Oliver Cromwell", "English Civil War"]},
 
     {"id": 1_009_083, "type": "resource", "subtype": "book-nonfiction",
      "title": "1688: The First Modern Revolution (Pincus, 2009)",
@@ -651,7 +651,7 @@ _NONFICTION: list[dict] = [
      "description": "Peter Hopkirk on the 19th-century imperial rivalry between Britain and Russia in Central Asia.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Great_Game",
      "priorities": {"popular-history-books": 870000},
-     "tags": []},
+     "tags": ["First Anglo-Afghan War", "Russian conquest of Central Asia", "Younghusband expedition to Tibet", "Crimean War"]},
 
     {"id": 1_009_143, "type": "resource", "subtype": "book-nonfiction",
      "title": "Empire: How Britain Made the Modern World (Ferguson, 2003)",
@@ -926,7 +926,7 @@ _NONFICTION: list[dict] = [
      "description": "David McCullough's biography of Wilbur and Orville Wright and their breakthrough.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Wright_Brothers_(book)",
      "priorities": {"popular-history-books": 880000},
-     "tags": []},
+     "tags": ["Wright Brothers' first powered flight"]},
 
     {"id": 1_009_221, "type": "resource", "subtype": "book-nonfiction",
      "title": "John Adams (McCullough, 2001)",
@@ -1104,7 +1104,7 @@ _NONFICTION: list[dict] = [
      "description": "John Keay's single-volume history of China from prehistory to the present.",
      "resource_link": "https://en.wikipedia.org/wiki/John_Keay",
      "priorities": {"popular-history-books": 860000},
-     "tags": []},
+     "tags": ["Qin Shi Huang unifies China", "Han dynasty", "Tang dynasty"]},
 
     {"id": 1_009_261, "type": "resource", "subtype": "book-nonfiction",
      "title": "Mao: The Unknown Story (Chang & Halliday, 2005)",
@@ -1128,7 +1128,7 @@ _NONFICTION: list[dict] = [
      "description": "John Keay's single-volume India.",
      "resource_link": "https://en.wikipedia.org/wiki/John_Keay",
      "priorities": {"popular-history-books": 830000},
-     "tags": []},
+     "tags": ["Maurya Empire", "Gupta Empire", "Mughal Empire"]},
 
     {"id": 1_009_264, "type": "resource", "subtype": "book-nonfiction",
      "title": "Freedom at Midnight (Collins & Lapierre, 1975)",
@@ -1152,7 +1152,7 @@ _NONFICTION: list[dict] = [
      "description": "Jawaharlal Nehru's sweeping Indian history, written in prison.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Discovery_of_India",
      "priorities": {"popular-history-books": 880000},
-     "tags": []},
+     "tags": ["Maurya Empire", "Gupta Empire", "Mughal Empire"]},
 
     {"id": 1_009_267, "type": "resource", "subtype": "book-nonfiction",
      "title": "Gandhi: The Years That Changed the World 1914-1948 (Guha, 2018)",
@@ -1168,7 +1168,7 @@ _NONFICTION: list[dict] = [
      "description": "John Reader's single-volume history of Africa from human origins to the late 20th century.",
      "resource_link": "https://en.wikipedia.org/wiki/John_Reader_(author)",
      "priorities": {"popular-history-books": 820000},
-     "tags": []},
+     "tags": ["Mali Empire", "Mansa Musa", "Great Zimbabwe", "Kingdom of Aksum"]},
 
     {"id": 1_009_269, "type": "resource", "subtype": "book-nonfiction",
      "title": "Long Walk to Freedom (Mandela, 1994)",
@@ -1217,7 +1217,7 @@ _NONFICTION: list[dict] = [
      "description": "Aleksandr Solzhenitsyn's epic exposé of the Soviet forced-labour system.",
      "resource_link": "https://en.wikipedia.org/wiki/The_Gulag_Archipelago",
      "priorities": {"popular-history-books": 920000},
-     "tags": []},
+     "tags": ["Stalin's Great Purge", "Joseph Stalin"]},
 
     {"id": 1_009_285, "type": "resource", "subtype": "book-nonfiction",
      "title": "The Diary of Samuel Pepys (Pepys, 1660-1669)",
@@ -1273,7 +1273,7 @@ _NONFICTION: list[dict] = [
      "description": "Howard Zinn's revisionist US history told from the perspective of workers, women, and minorities.",
      "resource_link": "https://en.wikipedia.org/wiki/A_People%27s_History_of_the_United_States",
      "priorities": {"popular-history-books": 920000},
-     "tags": []},
+     "tags": ["American Revolution", "American Civil War", "US Civil Rights Movement"]},
 
     {"id": 1_009_292, "type": "resource", "subtype": "book-nonfiction",
      "title": "Lies My Teacher Told Me (Loewen, 1995)",
