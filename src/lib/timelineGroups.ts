@@ -58,6 +58,7 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   // Europe — country lenses and pan-European classical timelines
   england: "europe",
   "england-monarchs": "europe",
+  wales: "europe",
   france: "europe",
   germany: "europe",
   "roman-history": "europe",
@@ -94,8 +95,26 @@ const TIMELINE_SLUG_TO_GROUP: Record<string, TimelineGroup> = {
   // Resources — podcasts, books, documentaries (occurrence_type='resource')
   "the-rest-is-history-podcast": "resources",
   "popular-history-books": "resources",
+  "resources-combined": "resources",
 };
 
-export function groupForSlug(slug: string): TimelineGroup {
-  return TIMELINE_SLUG_TO_GROUP[slug] ?? "major-periods";
+const VALID_GROUPS = new Set<string>(TIMELINE_GROUP_ORDER);
+
+// Resolution order:
+//   1. `dbGroup` — the timeline's `group` column (set in import_v2.py). This is
+//      the source of truth for new timelines, so they're categorised correctly
+//      without touching this file.
+//   2. the static slug map below (legacy / belt-and-braces).
+//   3. `isResourceTimeline` — any resource-flagged timeline falls into Resources.
+//   4. "major-periods" catch-all.
+export function groupForSlug(
+  slug: string,
+  isResourceTimeline?: boolean,
+  dbGroup?: string | null,
+): TimelineGroup {
+  if (dbGroup && VALID_GROUPS.has(dbGroup)) return dbGroup as TimelineGroup;
+  const mapped = TIMELINE_SLUG_TO_GROUP[slug];
+  if (mapped) return mapped;
+  if (isResourceTimeline) return "resources";
+  return "major-periods";
 }

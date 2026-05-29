@@ -47,43 +47,49 @@ from v2.data import master   # add new modules here as we build them
 # occurrence_type='resource' rows may carry priorities on it, and the
 # frontend filters out resources from every other timeline. The DB
 # enforces this via the otp_check_resource trigger (migration 011).
+# `group` drives the dropdown section a timeline lands in (mirrors the
+# TimelineGroup union in src/lib/timelineGroups.ts). Set it on every new
+# timeline so it's categorised correctly without a frontend code change.
+# Valid values: worldwide | europe | americas | asia | africa | australasia
+#               | conflicts | religions | major-periods | resources
 TIMELINES = [
-    {"slug": "master",            "name": "Master",                "display_order": 0,  "is_featured": True,  "is_resource_timeline": False},
-    {"slug": "arts-and-thoughts", "name": "Arts and Thoughts",     "display_order": 1,  "is_featured": True,  "is_resource_timeline": False},
-    {"slug": "england-monarchs",  "name": "England: Monarchs",     "display_order": 2,  "is_featured": True,  "is_resource_timeline": False},
-    {"slug": "us-presidents",     "name": "USA: Presidents",       "display_order": 3,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "china",             "name": "China",                 "display_order": 4,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "usa",               "name": "USA",                   "display_order": 5,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "france",            "name": "France",                "display_order": 6,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "india",             "name": "India",                 "display_order": 7,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "people",            "name": "People",                "display_order": 8,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "ww1",               "name": "World War I",           "display_order": 9,  "is_featured": False, "is_resource_timeline": False},
-    {"slug": "ww2",               "name": "World War II",          "display_order": 10, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "cold-war",          "name": "Cold War",              "display_order": 11, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "napoleonic",        "name": "Napoleonic Wars",       "display_order": 12, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "industrial",        "name": "Industrial Revolution", "display_order": 13, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "roman-emperors",    "name": "Rome: Emperors",        "display_order": 17, "is_featured": True,  "is_resource_timeline": False},
-    {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "ottoman",           "name": "Ottoman Empire",        "display_order": 22, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "major-religions",   "name": "Major Religions",       "display_order": 23, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "christianity",      "name": "Christianity",          "display_order": 24, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False, "is_resource_timeline": False},
-    {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False, "is_resource_timeline": False},
+    {"slug": "master",            "name": "Master",                "display_order": 0,  "is_featured": True,  "is_resource_timeline": False, "group": "worldwide"},
+    {"slug": "arts-and-thoughts", "name": "Arts and Thoughts",     "display_order": 1,  "is_featured": True,  "is_resource_timeline": False, "group": "worldwide"},
+    {"slug": "england-monarchs",  "name": "England: Monarchs",     "display_order": 2,  "is_featured": True,  "is_resource_timeline": False, "group": "europe"},
+    {"slug": "us-presidents",     "name": "USA: Presidents",       "display_order": 3,  "is_featured": False, "is_resource_timeline": False, "group": "americas"},
+    {"slug": "china",             "name": "China",                 "display_order": 4,  "is_featured": False, "is_resource_timeline": False, "group": "asia"},
+    {"slug": "usa",               "name": "USA",                   "display_order": 5,  "is_featured": False, "is_resource_timeline": False, "group": "americas"},
+    {"slug": "france",            "name": "France",                "display_order": 6,  "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "india",             "name": "India",                 "display_order": 7,  "is_featured": False, "is_resource_timeline": False, "group": "asia"},
+    {"slug": "people",            "name": "People",                "display_order": 8,  "is_featured": False, "is_resource_timeline": False, "group": "worldwide"},
+    {"slug": "ww1",               "name": "World War I",           "display_order": 9,  "is_featured": False, "is_resource_timeline": False, "group": "conflicts"},
+    {"slug": "ww2",               "name": "World War II",          "display_order": 10, "is_featured": False, "is_resource_timeline": False, "group": "conflicts"},
+    {"slug": "cold-war",          "name": "Cold War",              "display_order": 11, "is_featured": False, "is_resource_timeline": False, "group": "conflicts"},
+    {"slug": "napoleonic",        "name": "Napoleonic Wars",       "display_order": 12, "is_featured": False, "is_resource_timeline": False, "group": "conflicts"},
+    {"slug": "industrial",        "name": "Industrial Revolution", "display_order": 13, "is_featured": False, "is_resource_timeline": False, "group": "major-periods"},
+    {"slug": "renaissance",       "name": "Renaissance",           "display_order": 14, "is_featured": False, "is_resource_timeline": False, "group": "major-periods"},
+    {"slug": "england",           "name": "England",               "display_order": 15, "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "wales",             "name": "Wales",                 "display_order": 16, "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "roman-history",     "name": "Roman History",         "display_order": 16, "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "roman-emperors",    "name": "Rome: Emperors",        "display_order": 17, "is_featured": True,  "is_resource_timeline": False, "group": "europe"},
+    {"slug": "ancient-greece",    "name": "Ancient Greece",        "display_order": 17, "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "germany",           "name": "Germany",               "display_order": 18, "is_featured": False, "is_resource_timeline": False, "group": "europe"},
+    {"slug": "crusades",          "name": "Crusades",              "display_order": 19, "is_featured": False, "is_resource_timeline": False, "group": "conflicts"},
+    {"slug": "japan",             "name": "Japan",                 "display_order": 20, "is_featured": False, "is_resource_timeline": False, "group": "asia"},
+    {"slug": "pre-columbian-americas", "name": "Pre-Columbian Americas", "display_order": 21, "is_featured": False, "is_resource_timeline": False, "group": "americas"},
+    {"slug": "ottoman",           "name": "Ottoman Empire",        "display_order": 22, "is_featured": False, "is_resource_timeline": False, "group": "asia"},
+    {"slug": "major-religions",   "name": "Major Religions",       "display_order": 23, "is_featured": False, "is_resource_timeline": False, "group": "religions"},
+    {"slug": "christianity",      "name": "Christianity",          "display_order": 24, "is_featured": False, "is_resource_timeline": False, "group": "religions"},
+    {"slug": "islam",             "name": "Islam",                 "display_order": 25, "is_featured": False, "is_resource_timeline": False, "group": "religions"},
+    {"slug": "judaism",           "name": "Judaism",               "display_order": 26, "is_featured": False, "is_resource_timeline": False, "group": "religions"},
     # ----- Resource timelines (occurrence_type='resource' only) --------------
     # `resources-combined` is the union view — every resource regardless of
     # source carries a priority here so users can see one feed of all
     # podcasts + books interleaved by date. Per-source resource timelines
     # below let users drill into a single source.
-    {"slug": "resources-combined",          "name": "Resources: Combined",           "display_order": 99,  "is_featured": True,  "is_resource_timeline": True},
-    {"slug": "the-rest-is-history-podcast", "name": "The Rest Is History (podcast)", "display_order": 100, "is_featured": False, "is_resource_timeline": True},
-    {"slug": "popular-history-books",       "name": "Popular history books",         "display_order": 101, "is_featured": False, "is_resource_timeline": True},
+    {"slug": "resources-combined",          "name": "Resources: Combined",           "display_order": 99,  "is_featured": True,  "is_resource_timeline": True, "group": "resources"},
+    {"slug": "the-rest-is-history-podcast", "name": "The Rest Is History (podcast)", "display_order": 100, "is_featured": False, "is_resource_timeline": True, "group": "resources"},
+    {"slug": "popular-history-books",       "name": "Popular history books",         "display_order": 101, "is_featured": False, "is_resource_timeline": True, "group": "resources"},
 ]
 
 

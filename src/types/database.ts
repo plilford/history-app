@@ -12,6 +12,10 @@ export interface Timeline {
    *  may carry priorities on these. The frontend filters resources from
    *  every non-resource timeline. */
   is_resource_timeline: boolean;
+  /** Dropdown section this timeline belongs to (mirrors the TimelineGroup
+   *  union in src/lib/timelineGroups.ts). Nullable — a null group falls back
+   *  to the frontend slug-map / resource-flag / "major-periods" default. */
+  group?: string | null;
 }
 
 export interface Occurrence {

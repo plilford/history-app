@@ -148,7 +148,7 @@ export function TimelinePicker({
     // Bucket by group, preserving each group's existing display_order.
     const buckets = new Map<TimelineGroup, Timeline[]>();
     for (const t of matches) {
-      const g = groupForSlug(t.slug);
+      const g = groupForSlug(t.slug, t.is_resource_timeline, t.group);
       let arr = buckets.get(g);
       if (!arr) { arr = []; buckets.set(g, arr); }
       arr.push(t);
