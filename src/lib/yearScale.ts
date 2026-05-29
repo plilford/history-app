@@ -1,22 +1,34 @@
 // Year ↔ pixel mapping for the timeline.
 //
 // The mapping is linear within a "recent" band (the last LINEAR_RANGE_YEARS
-// years before yearMax) and natural-log compressed for everything older.
-// This lets a single scrollable timeline span the full data range — which can
-// extend to billions of years for geological occurrences — while still leaving
+// years before yearMax) and log-compressed for everything older. This lets a
+// single scrollable timeline span the full data range — which can extend to
+// billions of years for geological occurrences — while still leaving
 // human-history detail readable at the recent end.
 //
-// The derivative is continuous at the linear/log seam so the visual scale
-// transitions smoothly when scrolling between eras.
+// The older band uses a DOUBLE-log compression (a log of the log) so that deep
+// antiquity is squeezed much harder than a plain log would, without making the
+// recent/early-modern transition feel abrupt. DEEP_COMPRESSION (D) tunes the
+// strength: D → 0 recovers the plain natural-log curve; larger D compresses
+// older history more. The derivative is still continuous at the linear/log seam
+// so the visual scale transitions smoothly when scrolling between eras, and the
+// compression ramps in gradually (early-modern centuries are barely affected;
+// the squeeze accrues in ancient and deep-time bands).
 //
 //   t = yearMax - year   (years before yearMax)
-//   t ≤ L : px(t) = k * t                       (linear, k px/yr)
-//   t > L : px(t) = k * L * (1 + ln(t / L))     (log-compressed)
+//   u = ln(t / L)
+//   t ≤ L : px(t) = k * t                                  (linear, k px/yr)
+//   t > L : px(t) = k * L * (1 + (1/D) * ln(1 + D * u))     (double-log)
 //
 // Derivative (local pixels-per-year):
 //   t ≤ L : dpx/dt = k
-//   t > L : dpx/dt = k * L / t
-// Both branches give k at t = L, so the seam is smooth.
+//   t > L : dpx/dt = k * L / (t * (1 + D * u))
+// Both branches give k at t = L (u = 0), so the seam is smooth.
+
+// Strength of the deep-time squeeze in the log band. Higher = more compressed.
+// 0.5 keeps the last few centuries near-linear while shrinking BCE / deep-time
+// bands substantially. Lower it toward 0 to approach a plain log curve.
+const DEEP_COMPRESSION = 0.5;
 
 export type YearScale = {
   yearMin: number;
@@ -39,25 +51,31 @@ export function makeYearScale(
   linearRange: number,
 ): YearScale {
   const L = Math.max(1, linearRange);
+  const D = DEEP_COMPRESSION;
 
   function yearToPx(year: number): number {
     const t = yearMax - year;
     if (t <= 0) return 0;
     if (t <= L) return k * t;
-    return k * L * (1 + Math.log(t / L));
+    const u = Math.log(t / L);
+    return k * L * (1 + (1 / D) * Math.log(1 + D * u));
   }
 
   function pxToYear(px: number): number {
     if (px <= 0) return yearMax;
     if (px <= k * L) return yearMax - px / k;
-    const t = L * Math.exp(px / (k * L) - 1);
+    const P = px / (k * L);
+    // Invert px = k*L*(1 + (1/D)*ln(1 + D*u)) for u = ln(t/L):
+    const u = (Math.exp((P - 1) * D) - 1) / D;
+    const t = L * Math.exp(u);
     return yearMax - t;
   }
 
   function localPpy(year: number): number {
     const t = yearMax - year;
     if (t <= L) return k;
-    return (k * L) / t;
+    const u = Math.log(t / L);
+    return (k * L) / (t * (1 + D * u));
   }
 
   const totalHeight = yearToPx(yearMin);

@@ -1069,14 +1069,16 @@ function AppInner() {
       else ageBasedFloor = Math.max(40, ageYears * 0.30);
       const targetVisibleSpan = Math.max(typeBasedSpan, ageBasedFloor);
       const viewportH = Math.max(1, main.clientHeight - HEADER_HEIGHT_PX);
-      // Convert desired local-ppy at the target year back to the linear-band
-      // ppy `k` (the value held in pixelsPerYear). See yearScale.ts:
-      //   linear band  (t ≤ L):  localPpy = k
-      //   log band     (t > L):  localPpy = k * L / t
+      // Convert the desired local-ppy at the target year back into the
+      // linear-band ppy `k` (the value held in pixelsPerYear).
       const desiredLocalPpy = viewportH / targetVisibleSpan;
-      const t = scale.yearMax - target;
-      const L = scale.linearRange;
-      const newPpy = t <= L ? desiredLocalPpy : (desiredLocalPpy * t) / L;
+      // localPpy is linear in the linear-band ppy `k` (the value held in
+      // pixelsPerYear, which `scale` was built with). So the k that yields the
+      // desired local ppy at `target` is just the current k scaled by the
+      // ratio — independent of the exact compression curve in yearScale.ts.
+      const curLocalPpy = scale.localPpy(target);
+      const newPpy =
+        curLocalPpy > 0 ? (desiredLocalPpy * pixelsPerYear) / curLocalPpy : pixelsPerYear;
       const clamped = Math.max(MIN_PPY, Math.min(MAX_PPY, newPpy));
 
       if (Math.abs(clamped - pixelsPerYear) / Math.max(pixelsPerYear, clamped) > 0.05) {
