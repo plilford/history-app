@@ -1,11 +1,15 @@
-// Editor-only dashboard for reviewing user-reported issue flags. Rendered as a
+// Editor-only dashboard for reviewing user-submitted reports. Rendered as a
 // full-screen overlay so it doesn't need any client-side routing.
 //
-// Users file flags from an occurrence popup (FlagIssueModal). Here the editor
-// can read them, mark them resolved (kept for history), reopen, or delete.
+// Two tabs:
+//   - "Occurrence flags" — issues filed against a single occurrence from its
+//     popup (FlagIssueModal → issue_flags).
+//   - "App feedback" — general app feedback (bugs/ideas/copy) sent from the
+//     settings panel (FeedbackModal → app_feedback).
 //
-// All reads/writes are gated by the editor RLS policy on issue_flags; this UI
-// is also editor-gated at the call site.
+// In both the editor can read, mark resolved (kept for history), reopen, or
+// delete. All reads/writes are gated by the editor RLS policy on the tables;
+// this UI is also editor-gated at the call site.
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
@@ -21,6 +25,20 @@ interface FlagRow {
   created_at: string;
   resolved_at: string | null;
 }
+
+interface FeedbackRow {
+  id: number;
+  reporter_email: string;
+  category: string | null;
+  message: string;
+  status: string;
+  user_agent: string | null;
+  app_path: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+type Tab = "flags" | "feedback";
 
 export interface IssueFlagsAdminProps {
   onClose: () => void;
@@ -39,8 +57,17 @@ const ASPECT_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  bug: "Bug",
+  idea: "Idea / feature",
+  copy: "Copy / wording",
+  other: "Other",
+};
+
 export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
+  const [tab, setTab] = useState<Tab>("flags");
   const [rows, setRows] = useState<FlagRow[]>([]);
+  const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
@@ -48,12 +75,14 @@ export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from("issue_flags")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (err) { setError(err.message); setRows([]); setLoading(false); return; }
-    setRows((data ?? []) as FlagRow[]);
+    const [flagsRes, feedbackRes] = await Promise.all([
+      supabase.from("issue_flags").select("*").order("created_at", { ascending: false }),
+      supabase.from("app_feedback").select("*").order("created_at", { ascending: false }),
+    ]);
+    if (flagsRes.error) { setError(flagsRes.error.message); setRows([]); }
+    else setRows((flagsRes.data ?? []) as FlagRow[]);
+    if (feedbackRes.error) { setError((prev) => prev ?? feedbackRes.error!.message); setFeedback([]); }
+    else setFeedback((feedbackRes.data ?? []) as FeedbackRow[]);
     setLoading(false);
   }, []);
 
@@ -66,26 +95,42 @@ export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const table = tab === "flags" ? "issue_flags" : "app_feedback";
+
   const handleResolve = async (id: number, resolve: boolean) => {
     setError(null);
     const patch = resolve
       ? { status: "resolved", resolved_at: new Date().toISOString() }
       : { status: "open", resolved_at: null };
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-    const { error: err } = await supabase.from("issue_flags").update(patch).eq("id", id);
+    if (tab === "flags") setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    else setFeedback((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    const { error: err } = await supabase.from(table).update(patch).eq("id", id);
     if (err) { setError(err.message); await refresh(); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this flag permanently?")) return;
+    if (!confirm("Delete this permanently?")) return;
     setError(null);
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    const { error: err } = await supabase.from("issue_flags").delete().eq("id", id);
+    if (tab === "flags") setRows((prev) => prev.filter((r) => r.id !== id));
+    else setFeedback((prev) => prev.filter((r) => r.id !== id));
+    const { error: err } = await supabase.from(table).delete().eq("id", id);
     if (err) { setError(err.message); await refresh(); }
   };
 
-  const visible = filter === "open" ? rows.filter((r) => r.status === "open") : rows;
-  const openCount = rows.filter((r) => r.status === "open").length;
+  const visibleFlags = filter === "open" ? rows.filter((r) => r.status === "open") : rows;
+  const visibleFeedback = filter === "open" ? feedback.filter((r) => r.status === "open") : feedback;
+  const openFlags = rows.filter((r) => r.status === "open").length;
+  const openFeedback = feedback.filter((r) => r.status === "open").length;
+
+  const activeOpen = tab === "flags" ? openFlags : openFeedback;
+  const activeTotal = tab === "flags" ? rows.length : feedback.length;
+
+  const tabClass = (active: boolean) =>
+    `px-3 py-1.5 text-xs font-medium border-b-2 -mb-px ${
+      active
+        ? "border-blue-600 text-blue-600 dark:text-blue-400"
+        : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+    }`;
 
   return (
     <div
@@ -99,10 +144,10 @@ export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Review flagged issues
+              Review feedback
             </h2>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              {openCount} open · {rows.length} total
+              {activeOpen} open · {activeTotal} total
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -133,6 +178,16 @@ export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
           </div>
         </header>
 
+        {/* Tabs. */}
+        <div className="flex items-center gap-1 px-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <button type="button" className={tabClass(tab === "flags")} onClick={() => setTab("flags")}>
+            Occurrence flags{openFlags > 0 ? ` (${openFlags})` : ""}
+          </button>
+          <button type="button" className={tabClass(tab === "feedback")} onClick={() => setTab("feedback")}>
+            App feedback{openFeedback > 0 ? ` (${openFeedback})` : ""}
+          </button>
+        </div>
+
         {error && (
           <div className="px-4 py-2 text-xs text-red-600 dark:text-red-400 border-b border-slate-200 dark:border-slate-700">
             {error}
@@ -144,34 +199,100 @@ export function IssueFlagsAdmin({ onClose }: IssueFlagsAdminProps) {
             <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 animate-pulse">
               Loading…
             </div>
-          ) : visible.length === 0 ? (
+          ) : tab === "flags" ? (
+            visibleFlags.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
+                {filter === "open" ? "No open flags. 🎉" : "No flags yet."}
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-200 dark:divide-slate-800">
+                {visibleFlags.map((row) => (
+                  <li key={row.id} className="px-4 py-3 flex items-start gap-3 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className={`font-medium ${row.status === "resolved" ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-900 dark:text-slate-100"}`}>
+                          {row.occurrence_title}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {ASPECT_LABELS[row.aspect] ?? row.aspect}
+                        </span>
+                        {row.status === "resolved" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                            resolved
+                          </span>
+                        )}
+                      </div>
+                      {row.note && (
+                        <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{row.note}</p>
+                      )}
+                      <div className="mt-1 text-[11px] text-slate-400">
+                        {row.reporter_email} · {fmtDate(row.created_at)} · #{row.occurrence_id}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {row.status === "open" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleResolve(row.id, true)}
+                          className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                        >
+                          Resolve
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleResolve(row.id, false)}
+                          className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                          Reopen
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(row.id)}
+                        className="text-xs px-2 py-1 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : visibleFeedback.length === 0 ? (
             <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
-              {filter === "open" ? "No open flags. 🎉" : "No flags yet."}
+              {filter === "open" ? "No open feedback. 🎉" : "No feedback yet."}
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
-              {visible.map((row) => (
+              {visibleFeedback.map((row) => (
                 <li key={row.id} className="px-4 py-3 flex items-start gap-3 text-sm">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className={`font-medium ${row.status === "resolved" ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-900 dark:text-slate-100"}`}>
-                        {row.occurrence_title}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        {ASPECT_LABELS[row.aspect] ?? row.aspect}
-                      </span>
+                      {row.category && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          {CATEGORY_LABELS[row.category] ?? row.category}
+                        </span>
+                      )}
                       {row.status === "resolved" && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
                           resolved
                         </span>
                       )}
                     </div>
-                    {row.note && (
-                      <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{row.note}</p>
-                    )}
+                    <p className={`mt-1 text-xs whitespace-pre-wrap ${row.status === "resolved" ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
+                      {row.message}
+                    </p>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      {row.reporter_email} · {fmtDate(row.created_at)} · #{row.occurrence_id}
+                      {row.reporter_email} · {fmtDate(row.created_at)}
+                      {row.app_path ? ` · ${row.app_path}` : ""}
                     </div>
+                    {row.user_agent && (
+                      <div className="mt-0.5 text-[10px] text-slate-300 dark:text-slate-600 truncate" title={row.user_agent}>
+                        {row.user_agent}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-1 shrink-0">

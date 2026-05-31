@@ -12,6 +12,7 @@ import { DataFreshnessChip } from "./components/DataFreshnessChip";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { AiAccessAdmin } from "./components/AiAccessAdmin";
 import { FlagIssueModal } from "./components/FlagIssueModal";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { IssueFlagsAdmin } from "./components/IssueFlagsAdmin";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { useAiSummaryAccess } from "./lib/aiAccess";
@@ -863,6 +864,8 @@ function AppInner() {
   const [aiAdminOpen, setAiAdminOpen] = useState(false);
   // Editor-only flagged-issues review dashboard.
   const [flagsAdminOpen, setFlagsAdminOpen] = useState(false);
+  // General app-feedback modal (settings panel → "Send feedback").
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // When set, the FlagIssueModal is open seeded on this occurrence.
   const [flagSeed, setFlagSeed] = useState<EventWithPriority | null>(null);
   // Draggable dock width (persisted). The drag handle lives on the panel's left
@@ -1662,6 +1665,18 @@ function AppInner() {
     </button>
   ) : null;
 
+  // "Send feedback" entry — visible to everyone. Opens the general app-feedback
+  // modal (bugs / ideas / copy tweaks not tied to a single occurrence).
+  const feedbackMenuButton = (
+    <button
+      type="button"
+      onClick={() => { setFeedbackOpen(true); setSettingsOpen(false); }}
+      className="w-full text-left px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+    >
+      <span aria-hidden>💬</span> Send feedback
+    </button>
+  );
+
   // The panel element itself, rendered into either the side <aside> or the
   // full overlay depending on width. Built for the editor and allowlist users.
   const summaryPanel = summaryOpen && canSummarise ? (
@@ -1760,6 +1775,11 @@ function AppInner() {
                 {flagsMenuButton}
               </div>
             )}
+
+            {/* Send feedback — available to everyone. */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+              {feedbackMenuButton}
+            </div>
 
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               {user ? (
@@ -2021,6 +2041,13 @@ function AppInner() {
 
       {flagsAdminOpen && isEditor && (
         <IssueFlagsAdmin onClose={() => setFlagsAdminOpen(false)} />
+      )}
+
+      {feedbackOpen && (
+        <FeedbackModal
+          onClose={() => setFeedbackOpen(false)}
+          onRequestSignIn={() => setAuthModalOpen(true)}
+        />
       )}
 
       {flagSeed && (
